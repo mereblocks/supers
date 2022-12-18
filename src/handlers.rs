@@ -65,7 +65,6 @@ pub async fn start_program(
 
     // get the channel associated with this program and send it a start message
     let tx = data.channels.get(name).unwrap();
-    // let result = tx.send(START_MSG);
     if let Ok(_r) = tx.send(START_MSG) {
         let body = format!("Program {} has been instructed to start.\n", name);
         HttpResponse::Ok().body(body)
@@ -88,9 +87,8 @@ pub async fn stop_program(
         return HttpResponse::NotFound().body(body);
     }
 
-    // get the channel associated with this program and send it a start message
+    // get the channel associated with this program and send it a stop message
     let tx = data.channels.get(name).unwrap();
-    // let result = tx.send(START_MSG);
     if let Ok(_r) = tx.send(STOP_MSG) {
         let body = format!("Program {} has been instructed to stop.\n", name);
         HttpResponse::Ok().body(body)
@@ -113,9 +111,8 @@ pub async fn restart_program(
         return HttpResponse::NotFound().body(body);
     }
 
-    // get the channel associated with this program and send it a start message
+    // get the channel associated with this program and send it a restart message
     let tx = data.channels.get(name).unwrap();
-    // let result = tx.send(START_MSG);
     if let Ok(_r) = tx.send(RESTART_MSG) {
         let body = format!("Program {} has been instructed to restart.\n", name);
         HttpResponse::Ok().body(body)
