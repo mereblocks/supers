@@ -82,7 +82,7 @@ pub fn get_test_app_config() -> Vec<ProgramConfig> {
         cmd: String::from("ls"),
         args: vec![],
         env: envs2,
-        restartpolicy: RestartPolicy::Never,
+        restartpolicy: RestartPolicy::OnError,
     };
 
     vec![p1, p2, p3]
@@ -144,6 +144,7 @@ pub fn run_program(
                         break;
                     }
                 }
+                // otherwise, the program exited without success, so we restart it if the policy is Always or OnError
                 if p.restartpolicy == RestartPolicy::Always
                     || p.restartpolicy == RestartPolicy::OnError
                 {
@@ -193,7 +194,6 @@ pub fn run_program(
         }
         // check to see if we are ready to break to the top of the loop and restart the program
         if break_outer_loop {
-            println!("Program {} breaking outer loop, should now restart", p.name);
             continue;
         }
 
