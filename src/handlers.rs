@@ -1,14 +1,11 @@
-use std::{sync::{Mutex, Arc}, fmt::format};
+use actix_web::{get, post, web, HttpResponse, Responder};
 
-use actix_web::{get, post, Responder, HttpResponse, web};
-
-use crate::{state::ApplicationState, WebAppState};
+use crate::WebAppState;
 
 // Messages for inter-thread communication
 pub(crate) static START_MSG: i32 = 1;
 pub static RESTART_MSG: i32 = 2;
 pub static STOP_MSG: i32 = 3;
-
 
 /// Web routes
 
@@ -17,16 +14,13 @@ pub async fn ready() -> impl Responder {
     HttpResponse::Ok().body("supers ready\n")
 }
 
-
 #[get("/app")]
 pub async fn get_app_status(data: web::Data<WebAppState>) -> impl Responder {
     let d = data.app_state.lock().unwrap();
     let status = &d.application_status;
-    let body = format!("App status is: {}\n", status.to_string());
+    let body = format!("App status is: {}\n", status);
     HttpResponse::Ok().body(body)
-
 }
-
 
 #[get("/programs")]
 pub async fn get_programs(data: web::Data<WebAppState>) -> impl Responder {
@@ -35,14 +29,16 @@ pub async fn get_programs(data: web::Data<WebAppState>) -> impl Responder {
     for (key, val) in &d.programs {
         let s = format!("{}: {}\n", key, val);
         body.push_str(&s);
-
     }
-    
+
     HttpResponse::Ok().body(body)
 }
 
 #[get("/programs/{name}")]
-pub async fn get_program(data: web::Data<WebAppState>, path: web::Path<(String,)>,) -> impl Responder {
+pub async fn get_program(
+    data: web::Data<WebAppState>,
+    path: web::Path<(String,)>,
+) -> impl Responder {
     let name = &path.0;
     let d = data.app_state.lock().unwrap();
     if !d.programs.contains_key(name) {
@@ -50,12 +46,15 @@ pub async fn get_program(data: web::Data<WebAppState>, path: web::Path<(String,)
         return HttpResponse::NotFound().body(body);
     }
     let status = d.programs.get(name).unwrap();
-    let body = format!("Status of program {} is: {}\n", name, &status);    
+    let body = format!("Status of program {} is: {}\n", name, &status);
     HttpResponse::Ok().body(body)
 }
 
 #[post("/programs/{name}/start")]
-pub async fn start_program(data: web::Data<WebAppState>, path: web::Path<(String,)>,) -> impl Responder {
+pub async fn start_program(
+    data: web::Data<WebAppState>,
+    path: web::Path<(String,)>,
+) -> impl Responder {
     let name = &path.0;
     let d = data.app_state.lock().unwrap();
     // check that `name` is an existing program
@@ -67,20 +66,20 @@ pub async fn start_program(data: web::Data<WebAppState>, path: web::Path<(String
     // get the channel associated with this program and send it a start message
     let tx = data.channels.get(name).unwrap();
     // let result = tx.send(START_MSG);
-    if let Ok(r) = tx.send(START_MSG) {
+    if let Ok(_r) = tx.send(START_MSG) {
         let body = format!("Program {} has been instructed to start.\n", name);
-        return HttpResponse::Ok().body(body)
-
-    }
-    else {
+        HttpResponse::Ok().body(body)
+    } else {
         let body = format!("Error sending message to {} channel\n", name);
-        return HttpResponse::BadRequest().body(body);
+        HttpResponse::BadRequest().body(body)
     }
-
 }
 
 #[post("/programs/{name}/stop")]
-pub async fn stop_program(data: web::Data<WebAppState>, path: web::Path<(String,)>,) -> impl Responder {
+pub async fn stop_program(
+    data: web::Data<WebAppState>,
+    path: web::Path<(String,)>,
+) -> impl Responder {
     let name = &path.0;
     let d = data.app_state.lock().unwrap();
     // check that `name` is an existing program
@@ -92,20 +91,20 @@ pub async fn stop_program(data: web::Data<WebAppState>, path: web::Path<(String,
     // get the channel associated with this program and send it a start message
     let tx = data.channels.get(name).unwrap();
     // let result = tx.send(START_MSG);
-    if let Ok(r) = tx.send(STOP_MSG) {
+    if let Ok(_r) = tx.send(STOP_MSG) {
         let body = format!("Program {} has been instructed to stop.\n", name);
-        return HttpResponse::Ok().body(body)
-
-    }
-    else {
+        HttpResponse::Ok().body(body)
+    } else {
         let body = format!("Error sending message to {} channel\n", name);
-        return HttpResponse::BadRequest().body(body);
+        HttpResponse::BadRequest().body(body)
     }
-
 }
 
 #[post("/programs/{name}/restart")]
-pub async fn restart_program(data: web::Data<WebAppState>, path: web::Path<(String,)>,) -> impl Responder {
+pub async fn restart_program(
+    data: web::Data<WebAppState>,
+    path: web::Path<(String,)>,
+) -> impl Responder {
     let name = &path.0;
     let d = data.app_state.lock().unwrap();
     // check that `name` is an existing program
@@ -117,14 +116,11 @@ pub async fn restart_program(data: web::Data<WebAppState>, path: web::Path<(Stri
     // get the channel associated with this program and send it a start message
     let tx = data.channels.get(name).unwrap();
     // let result = tx.send(START_MSG);
-    if let Ok(r) = tx.send(RESTART_MSG) {
+    if let Ok(_r) = tx.send(RESTART_MSG) {
         let body = format!("Program {} has been instructed to restart.\n", name);
-        return HttpResponse::Ok().body(body)
-
-    }
-    else {
+        HttpResponse::Ok().body(body)
+    } else {
         let body = format!("Error sending message to {} channel\n", name);
-        return HttpResponse::BadRequest().body(body);
+        HttpResponse::BadRequest().body(body)
     }
-
 }

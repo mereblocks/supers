@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::process::Command;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::thread::{self, JoinHandle, sleep};
+use std::thread::{self, sleep, JoinHandle};
 
 use actix_web::web::Data;
 use actix_web::{App, HttpServer};
@@ -16,7 +16,6 @@ use crate::state::ProgramStatus;
 mod errors;
 mod handlers;
 mod state;
-
 
 /// These are the available restart policies for programs
 #[derive(Clone, PartialEq)]
@@ -95,11 +94,10 @@ pub fn run_program(
     app_state: Arc<Mutex<ApplicationState>>,
     rx: Receiver<i32>,
 ) -> Result<(), SupersError> {
-
     loop {
-        let mut break_outer_loop = false;        
+        let mut break_outer_loop = false;
         // Start the program in a child process.
-        println!("Starting child process for program {}", p.name.to_string());
+        println!("Starting child process for program {}", p.name);
         let mut child = Command::new(&p.cmd)
             .args(&p.args)
             .envs(&p.env)
@@ -116,7 +114,7 @@ pub fn run_program(
         // inner loop 1: wait for either a command message on the rx channel or for the process to exit.
         // if the process exits, check the exit status and the program config to determine if it should be started again.
         //   if it should be started again, set the break_outer_loop to true; in either case, break out of this loop.
-        //   if it shouldn't be started again, we only break out of this first inner loop; the second one will wait for 
+        //   if it shouldn't be started again, we only break out of this first inner loop; the second one will wait for
         //      messages.
         loop {
             let ten_millis = time::Duration::from_millis(10);
@@ -141,69 +139,66 @@ pub fn run_program(
                         break_outer_loop = true;
                         break;
                     }
-                    // otherwise, we break out of the inner loop but not the outer loop 
+                    // otherwise, we break out of the inner loop but not the outer loop
                     else {
                         break;
                     }
                 }
-                // otherwise, the program has exited with an error, so restart the program for Always or OnError
+                if p.restartpolicy == RestartPolicy::Always
+                    || p.restartpolicy == RestartPolicy::OnError
+                {
+                    // break the outer loop so that we restart the program
+                    break_outer_loop = true;
+                    break;
+                }
+                // otherwise, we break out of the inner loop but not the outer loop
                 else {
-                    if p.restartpolicy == RestartPolicy::Always || p.restartpolicy == RestartPolicy::OnError {
-                        // break the outer loop so that we restart the program
-                        break_outer_loop = true;
-                        break;
-                    }
-                    // otherwise, we break out of the inner loop but not the outer loop 
-                    else {
-                        break;
-                    }
+                    break;
                 }
             }
             // If we are here, we did not break out of the inner loop 1, so the program is still running.
             // check to see if we have a new message
             let msg = rx.try_recv();
-            // ** TODO ** for now, we'll just swallow communication errors. 
+            // ** TODO ** for now, we'll just swallow communication errors.
             if let Ok(m) = msg {
                 if m == handlers::START_MSG {
                     // the program is already running, so a START message is a no op; continue to the top of loop1
                     continue;
                 } else if m == handlers::STOP_MSG {
-                    println!("Program {} received stop message; killing process.", p.name.to_string());
+                    println!("Program {} received stop message; killing process.", p.name);
                     // for a stop message, we just need to kill the process. We don't want to break from the outer loop
                     // and start the program again but we do want to break from this loop
-                    let _r = child.kill().expect("Unable to kill child process!");
+                    child.kill().expect("Unable to kill child process!");
                     let mut a = app_state.lock().unwrap();
                     *a.programs
                         .entry(p.name.to_string())
                         .or_insert(ProgramStatus::Stopped) = ProgramStatus::Stopped;
-                    drop(a);    
+                    drop(a);
                     break;
                 }
                 // otherwise, the message is a RESTART. we need to kill the process and break all the way out of the
-                // outer loop to restart the program 
+                // outer loop to restart the program
                 else {
-                    println!("Program {} received restart message; killing process and then starting a new one.", p.name.to_string());
-                    let _r = child.kill().expect("Unable to kill child process!");
+                    println!("Program {} received restart message; killing process and then starting a new one.", p.name);
+                    child.kill().expect("Unable to kill child process!");
                     let mut a = app_state.lock().unwrap();
                     *a.programs
                         .entry(p.name.to_string())
                         .or_insert(ProgramStatus::Stopped) = ProgramStatus::Stopped;
-                    drop(a);    
+                    drop(a);
                     break_outer_loop = true;
                     break;
                 }
-
             }
-
         }
         // check to see if we are ready to break to the top of the loop and restart the program
         if break_outer_loop {
-            println!("Program {} breaking outer loop, should now restart", p.name.to_string());
+            println!("Program {} breaking outer loop, should now restart", p.name);
             continue;
         }
-        
+
         // inner loop 2:
-        // if we are here, the program is stopped. we simply loop, receviing messages until we get a START 
+        // if we are here, the program is stopped. we simply loop, receviing messages until we get a START
         // or RESTART message
         loop {
             // we can just block forever until we get a message
@@ -211,41 +206,14 @@ pub fn run_program(
             if msg == handlers::STOP_MSG {
                 // the program is already stopped, so just loop back up to get the next message
                 continue;
-            } 
+            }
             // otherwise, we got a START or a RESTART, so break out of both this loop and the outer loop
             // to restart the program
             else {
                 break;
             }
-            
         }
-    
-        // // Block until the process exits and collect the exit code
-        // let exit_status = child
-        //     .wait()
-        //     .map_err(|e| SupersError::ProgramProcessExitError(p.name.to_string(), e))?;
-
-        // // Program exited, so update the status
-        // let mut a = app_state.lock().unwrap();
-        // *a.programs
-        //     .entry(p.name.to_string())
-        //     .or_insert(ProgramStatus::Stopped) = ProgramStatus::Stopped;
-        // drop(a);
-
-        // // Check the exit status to determine whether to run the program again.
-        // if exit_status.success() {
-        //     println!("Program {} exited successfully.", &p.name);
-        //     if p.restartpolicy == RestartPolicy::Always {
-        //         return run_program(p, app_state, rx);
-        //     }
-        // } else {
-        //     println!(
-        //         "Program {} did exit successfully; status: {}.",
-        //         &p.name, exit_status
-        //     );
-        // }
     }
-    Ok(())
 }
 
 /// Starts the threads for all the programs in a specific app config
@@ -282,14 +250,11 @@ pub fn start_server_thread() -> Result<(), SupersError> {
     Ok(())
 }
 
-
-
 #[derive(Clone)]
 pub struct WebAppState {
     app_state: Arc<Mutex<ApplicationState>>,
     channels: HashMap<String, Sender<i32>>,
 }
-
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -299,17 +264,16 @@ async fn main() -> std::io::Result<()> {
         programs: HashMap::new(),
     }));
 
-
     let (_threads, channels) = start_program_threads(app_config, &app_state).unwrap();
 
     // create the webapp state object
     let webapp_state = WebAppState {
-        app_state: app_state,
-        channels: channels,
+        app_state,
+        channels,
     };
 
     // Start the HTTP server
-    HttpServer::new( move || {
+    HttpServer::new(move || {
         App::new()
             .app_data(Data::new(webapp_state.clone()))
             .service(handlers::ready)

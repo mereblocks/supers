@@ -12,7 +12,6 @@ impl Display for ProgramStatus {
     }
 }
 
-
 #[derive(Debug)]
 pub enum ApplicationStatus {
     Running,
@@ -26,9 +25,7 @@ impl Display for ApplicationStatus {
 }
 
 pub struct ApplicationState {
-    
     pub application_status: ApplicationStatus,
 
     pub programs: HashMap<String, ProgramStatus>,
-
 }
