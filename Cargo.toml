@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 thiserror = "1.0"
 actix-web = "4"
+crossbeam = "0.8"

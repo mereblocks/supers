@@ -16,6 +16,7 @@ use crate::state::ProgramStatus;
 mod errors;
 mod handlers;
 mod state;
+mod programs;
 
 /// These are the available restart policies for programs
 #[derive(Clone, PartialEq)]
