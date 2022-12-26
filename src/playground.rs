@@ -73,28 +73,8 @@ mod test {
         let (s1, r1) = unbounded();
         let (s2, r2) = unbounded();
         let start = Instant::now();
-        thread::spawn(move || -> Result<()> {
-            let mut rng = thread_rng();
-            let dur = Duration::from_secs(rng.gen_range(1..10));
-            println!(
-                "Thread 1 will sleep {} secs and send message 1",
-                dur.as_secs()
-            );
-            thread::sleep(dur);
-            s1.send(1)?;
-            Ok(())
-        });
-        thread::spawn(move || -> Result<()> {
-            let mut rng = thread_rng();
-            let dur = Duration::from_secs(rng.gen_range(1..10));
-            println!(
-                "Thread 2 will sleep {} secs and send message 2",
-                dur.as_secs()
-            );
-            thread::sleep(dur);
-            s2.send(2)?;
-            Ok(())
-        });
+        thread::spawn(move || random_sleeper(1, s1));
+        thread::spawn(move || random_sleeper(2, s2));
         select! {
             recv(r1) -> msg => println!("From thread 1 got: {:?}", msg),
             recv(r2) -> msg => println!("From thread 2 got: {:?}", msg),
