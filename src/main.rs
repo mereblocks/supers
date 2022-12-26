@@ -16,6 +16,8 @@ use crate::state::ProgramStatus;
 mod errors;
 mod handlers;
 mod state;
+// TODO: This is just a module for playing with ideas. Remove before production.
+mod playground;
 
 /// These are the available restart policies for programs
 #[derive(Clone, PartialEq)]
