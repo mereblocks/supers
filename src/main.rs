@@ -17,8 +17,10 @@ mod errors;
 mod handlers;
 mod state;
 mod programs;
+mod control;
 // TODO: This is just a module for playing with ideas. Remove before production.
 mod playground;
+mod messages;
 
 /// These are the available restart policies for programs
 #[derive(Clone, PartialEq)]
