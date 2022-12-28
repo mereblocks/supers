@@ -9,8 +9,11 @@ pub enum SupersError {
     #[error("supers was unable to start thread for program {0}; details: {1}")]
     ProgramThreadStartError(String, std::io::Error),
 
-    #[error("supers program thread was unable to recv message from threads channel for program {0}; details: {1}")]
-    ProgramThreadThreadsChannelError(String, crossbeam::channel::RecvError),
+    #[error("supers was unable to check process status for program {0}; details: {1}")]
+    ProgramCheckProcessStatusError(String, std::io::Error),
+
+    #[error("supers got error trying to recv message from command channel for program {0}; details: {1}")]
+    ProgramCmdChannelError(String, std::io::Error),
 
     #[error("supers failed to spawn child process for program {0}; details: {1}")]
     ProgramProcessSpawnError(String, std::io::Error),

@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod test {
+    use actix_web::guard::Options;
     use anyhow::Result;
     use crossbeam::{
         channel::{unbounded, Select, Sender},
@@ -16,6 +17,29 @@ mod test {
     struct Msg {
         #[allow(dead_code)]
         command: String,
+    }
+
+    fn test_child_match() -> Result<()> {
+        let mut c: Option<std::process::Child> = None;
+        let child = std::process::Command::new("ls").spawn().unwrap();
+        let mut rng = thread_rng();
+        let chance = rng.gen_range(1..2);
+        if chance < 2 {
+            c = Some(child);
+        }
+        loop {
+            match &c {
+                Some(ch) => {
+                    let status = ch.wait();
+                    break;
+                }
+                None => {
+                    println!("No child");
+                }
+            };
+        }
+
+        Ok(())
     }
 
     #[test]
