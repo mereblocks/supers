@@ -60,7 +60,11 @@ fn run_state_machine(
 ) -> Result<SupersChild, SupersError> {
     let status = get_child_status(&p.name, &mut child)?;
     Ok(match (status, msg) {
-        (ChildStatus::NoChild, None) => child,
+        (ChildStatus::NoChild, None) => {
+            // There is no child and no command to process.
+            // Definitely nothing to do here.
+            child
+        }
         (ChildStatus::NoChild, Some(CommandMsg::Start)) => {
             // This is the only place where we actually spawn a child
             update_pgm_status(app_state, &p.name, ProgramStatus::Running);
@@ -239,7 +243,8 @@ mod test {
     use crossbeam::channel::{select, unbounded};
     use std::{
         sync::{Arc, Mutex},
-        thread, time::Duration,
+        thread,
+        time::Duration,
     };
 
     use crate::{
