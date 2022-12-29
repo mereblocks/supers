@@ -12,8 +12,9 @@ impl Display for ProgramStatus {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub enum ApplicationStatus {
+    #[default]
     Running,
     // TODO -- uncomment when implementing the app stop endpoint
     // Stopped,
@@ -25,8 +26,8 @@ impl Display for ApplicationStatus {
     }
 }
 
+#[derive(Debug, Default)]
 pub struct ApplicationState {
     pub application_status: ApplicationStatus,
-
     pub programs: HashMap<String, ProgramStatus>,
 }
