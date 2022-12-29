@@ -2,10 +2,7 @@ use actix_web::{get, post, web, HttpResponse, Responder};
 
 use crate::WebAppState;
 
-// Messages for inter-thread communication
-pub(crate) static START_MSG: i32 = 1;
-pub static RESTART_MSG: i32 = 2;
-pub static STOP_MSG: i32 = 3;
+use crate::messages::CommandMsg;
 
 /// Web routes
 
@@ -65,7 +62,7 @@ pub async fn start_program(
 
     // get the channel associated with this program and send it a start message
     let tx = data.channels.get(name).unwrap();
-    if let Ok(_r) = tx.send(START_MSG) {
+    if let Ok(_r) = tx.send(CommandMsg::Start) {
         let body = format!("Program {} has been instructed to start.\n", name);
         HttpResponse::Ok().body(body)
     } else {
@@ -89,7 +86,7 @@ pub async fn stop_program(
 
     // get the channel associated with this program and send it a stop message
     let tx = data.channels.get(name).unwrap();
-    if let Ok(_r) = tx.send(STOP_MSG) {
+    if let Ok(_r) = tx.send(CommandMsg::Stop) {
         let body = format!("Program {} has been instructed to stop.\n", name);
         HttpResponse::Ok().body(body)
     } else {
@@ -113,7 +110,7 @@ pub async fn restart_program(
 
     // get the channel associated with this program and send it a restart message
     let tx = data.channels.get(name).unwrap();
-    if let Ok(_r) = tx.send(RESTART_MSG) {
+    if let Ok(_r) = tx.send(CommandMsg::Restart) {
         let body = format!("Program {} has been instructed to restart.\n", name);
         HttpResponse::Ok().body(body)
     } else {

@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod test {
-    use actix_web::guard::Options;
     use anyhow::Result;
     use crossbeam::{
         channel::{unbounded, Select, Sender},
@@ -19,6 +18,7 @@ mod test {
         command: String,
     }
 
+    #[test]
     fn test_child_match() -> Result<()> {
         let mut c: Option<std::process::Child> = None;
         let child = std::process::Command::new("ls").spawn().unwrap();
@@ -28,9 +28,9 @@ mod test {
             c = Some(child);
         }
         loop {
-            match &c {
+            match c.as_mut() {
                 Some(ch) => {
-                    let status = ch.wait();
+                    let _status = ch.wait();
                     break;
                 }
                 None => {

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Display};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum ProgramStatus {
     Running,
     Stopped,
@@ -15,7 +15,8 @@ impl Display for ProgramStatus {
 #[derive(Debug)]
 pub enum ApplicationStatus {
     Running,
-    Stopped,
+    // TODO -- uncomment when implementing the app stop endpoint
+    // Stopped,
 }
 
 impl Display for ApplicationStatus {
