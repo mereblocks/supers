@@ -235,9 +235,41 @@ pub fn start_program_threads(
 
 #[cfg(test)]
 mod test {
-    use std::thread;
-
+    use anyhow::Result;
     use crossbeam::channel::{select, unbounded};
+    use std::{
+        sync::{Arc, Mutex},
+        thread, time::Duration,
+    };
+
+    use crate::{
+        get_test_app_config, messages::CommandMsg, state::ApplicationState,
+    };
+
+    use super::pgm_thread;
+
+    #[test]
+    fn test_state_machine() -> Result<()> {
+        let p = get_test_app_config()[2].clone();
+        let app_state = Arc::new(Mutex::new(ApplicationState::default()));
+        let (s, r) = unbounded();
+        let t;
+        {
+            let s = s.clone();
+            let app_state = app_state.clone();
+            t = thread::spawn(move || -> Result<()> {
+                Ok(pgm_thread(p, app_state, s, r)?)
+            });
+        }
+        s.send(CommandMsg::Start)?;
+        thread::sleep(Duration::from_secs(2));
+        println!("State: {:?}", app_state.lock().unwrap());
+        s.send(CommandMsg::Start)?;
+        thread::sleep(Duration::from_secs(2));
+        println!("State: {:?}", app_state.lock().unwrap());
+        t.join().unwrap().unwrap();
+        Ok(())
+    }
 
     #[test]
     pub fn test_channels() {
