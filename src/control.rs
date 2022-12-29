@@ -1,34 +1,34 @@
 use crate::messages::{ControlMsg, ProgramMsg};
-use anyhow::Result;
+use anyhow::{Error, Result};
 use crossbeam::channel::{Receiver, Sender};
-use std::thread;
+use log::warn;
+use std::thread::{self, JoinHandle};
 
 pub fn start_control(
     control: &Receiver<ControlMsg>,
     programs: &[&Sender<ProgramMsg>],
-) -> Result<()> {
-    {
-        let control = control.clone();
-        let programs = programs.iter().cloned().cloned().collect::<Vec<_>>();
-        let control_thread = thread::spawn(move || -> Result<()> {
-            loop {
-                let msg = control.recv()?;
-                match msg {
-                    ControlMsg::StopAll => {
-                        for program in &programs {
-                            program.send(ProgramMsg::Stop).unwrap_or_else(|_err| {
-                                println!("channel {:?} closed, ignoring", program);
-                            })
-                        }
+) -> JoinHandle<Result<(), Error>> {
+    let control = control.clone();
+    let programs = programs.iter().cloned().cloned().collect::<Vec<_>>();
+    thread::spawn(move || -> Result<()> {
+        loop {
+            let msg = control.recv()?;
+            match msg {
+                ControlMsg::StopAll => {
+                    for program in &programs {
+                        program.send(ProgramMsg::Stop).unwrap_or_else(|_err| {
+                            warn!("channel {:?} closed, ignoring", program);
+                        })
                     }
-                    ControlMsg::StopControl => break,
+                }
+                ControlMsg::StopControl => {
+                    warn!("Control thread shutting down.");
+                    break;
                 }
             }
-            Ok(())
-        });
-        control_thread.join().expect("control thread panicked")?;
-    }
-    Ok(())
+        }
+        Ok(())
+    })
 }
 
 #[cfg(test)]
@@ -37,10 +37,18 @@ mod test {
 
     use anyhow::Result;
     use crossbeam::channel::{unbounded, Receiver, Sender};
+    use log::{info, LevelFilter};
 
     use crate::messages::{ControlMsg, ProgramMsg};
 
     use super::start_control;
+
+    fn init_log() {
+        let mut builder = env_logger::Builder::new();
+        builder.filter_level(LevelFilter::Debug);
+        builder.parse_default_env();
+        builder.init();
+    }
 
     fn my_thread(
         name: &str,
@@ -48,15 +56,15 @@ mod test {
         command: &Receiver<ProgramMsg>,
     ) -> Result<()> {
         loop {
-            println!("{name}: I'm thread {name}");
+            info!("{name}: I'm thread {name}");
             let cmd = command.recv()?;
-            println!("{name}: Was sent command {:?}", cmd);
+            info!("{name}: Was sent command {:?}", cmd);
             match cmd {
                 ProgramMsg::Stop => {
-                    println!("{name}: Was asked to stop...");
+                    info!("{name}: Was asked to stop...");
                     if name == "foo" {
                         control.send(ControlMsg::StopAll)?;
-                        println!("{name}:  I'm foo, so asking everyone to stop");
+                        info!("{name}:  I'm foo, so asking everyone to stop");
                     }
                     break;
                 }
@@ -68,6 +76,9 @@ mod test {
 
     #[test]
     fn test_foo() -> Result<()> {
+        init_log();
+
+        info!("Starting!");
         let (s1, r1) = unbounded();
         let (s2, r2) = unbounded();
         let (s3, r3) = unbounded();
@@ -76,6 +87,7 @@ mod test {
         let t1;
         let t2;
         let t3;
+        let control;
         {
             let control_s = control_s.clone();
             t1 = thread::spawn(move || my_thread("foo", &control_s, &r1));
@@ -91,24 +103,26 @@ mod test {
         {
             let s1 = s1.clone();
             let s2 = s2.clone();
-            thread::spawn(move || -> Result<()> {
-                start_control(&control_r, &[&s1, &s2, &s3])?;
-                Ok(())
-            });
+            control = start_control(&control_r, &[&s1, &s2, &s3]);
         }
-        println!("Control started");
+        info!("Control started");
 
         thread::sleep(Duration::from_secs(3));
-        println!("Sending STOP to thread 'bar'");
+        info!("Sending STOP to thread 'bar'");
         s2.send(ProgramMsg::Stop)?;
 
         thread::sleep(Duration::from_secs(3));
-        println!("Sending STOP to thread 'foo'. All should stop!");
+        info!("Sending STOP to thread 'foo'. All should stop!");
         s1.send(ProgramMsg::Stop)?;
+
+        thread::sleep(Duration::from_secs(5));
+        info!("Sending STOP to Control thread.");
+        control_s.send(ControlMsg::StopControl)?;
 
         t1.join().expect("")?;
         t2.join().expect("")?;
         t3.join().expect("")?;
+        control.join().expect("")?;
         Ok(())
     }
 }
