@@ -53,28 +53,18 @@ pub fn pgm_thread(
     let mut status = None;
     loop {
         // First, check the status of the current child if we have one.
-        match current_child.as_mut() {
-            Some(child) => {
-                status = child.try_wait().map_err(|e| {
-                    SupersError::ProgramCheckProcessStatusError(p.name.to_string(), e)
-                })?;
-                // If we got a status, set the program status to Stopped and set the
-                // current_child to None (TODO -- check this)
-                match status {
-                    Some(_s) => {
-                        let app_state_clone = app_state.clone();
-                        update_pgm_status(
-                            app_state_clone,
-                            p.name.to_string(),
-                            ProgramStatus::Stopped,
-                        );
+        if let Some(child) = current_child.as_mut() {
+            status = child
+                .try_wait()
+                .map_err(|e| SupersError::ProgramCheckProcessStatusError(p.name.to_string(), e))?;
+            // If we got a status, set the program status to Stopped and set the
+            // current_child to None (TODO -- check this)
+            if let Some(_s) = status {
+                let app_state_clone = app_state.clone();
+                update_pgm_status(app_state_clone, p.name.to_string(), ProgramStatus::Stopped);
 
-                        current_child = None;
-                    }
-                    None => {}
-                };
-            }
-            None => {}
+                current_child = None;
+            };
         };
         // check for a new message on the command channel
         let msg = cmd_rx.recv_timeout(WAIT_TIMEOUT);
@@ -181,13 +171,17 @@ pub fn pgm_thread(
     }
 }
 
+/// Type alias for the start_program_threads return type; A tuple type containing the thread handles for each thread
+/// started as well as a hashmap of the command channels created for each program in the App config.
+type ProgramControls = (Vec<JoinHandle<()>>, HashMap<String, Sender<CommandMsg>>);
+
 /// Main entrypoint for the programs.rs module; For each program in the app_config, this function:
 /// 1) creates a command channel to process commands from the administrative API
 /// 2) starts a thread to run and monitor the program, passing in the command channel.
 pub fn start_program_threads(
     app_config: Vec<ProgramConfig>,
     app_state: &Arc<Mutex<ApplicationState>>,
-) -> Result<(Vec<JoinHandle<()>>, HashMap<String, Sender<CommandMsg>>), SupersError> {
+) -> Result<ProgramControls, SupersError> {
     let mut handles: Vec<JoinHandle<()>> = vec![];
     let mut send_channels = HashMap::new();
     // start a thread for each program in the config
