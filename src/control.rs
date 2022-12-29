@@ -3,16 +3,21 @@ use anyhow::{Error, Result};
 use crossbeam::channel::{Receiver, Sender};
 use log::warn;
 use std::thread::{self, JoinHandle};
+use tracing::{event, span, Level};
 
 pub fn start_control(
     control: &Receiver<ControlMsg>,
     programs: &[&Sender<ProgramMsg>],
 ) -> JoinHandle<Result<(), Error>> {
+    let _span = span!(Level::INFO, "control").entered();
+    event!(Level::WARN, "Starting control");
     let control = control.clone();
     let programs = programs.iter().cloned().cloned().collect::<Vec<_>>();
     thread::spawn(move || -> Result<()> {
+        let _span = span!(Level::INFO, "control_thread").entered();
         loop {
             let msg = control.recv()?;
+            event!(Level::INFO, msg = ?msg, "Got a message");
             match msg {
                 ControlMsg::StopAll => {
                     for program in &programs {
@@ -48,6 +53,9 @@ mod test {
         builder.filter_level(LevelFilter::Debug);
         builder.parse_default_env();
         builder.init();
+
+        let x = tracing_subscriber::FmtSubscriber::new();
+        tracing::subscriber::set_global_default(x).expect("setting default subscriber failed");
     }
 
     fn my_thread(
