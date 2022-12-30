@@ -3,6 +3,12 @@ use thiserror::Error;
 /// SupersError enumerates all possible error types returned by supers.
 #[derive(Error, Debug)]
 pub enum SupersError {
+    #[error("supers was unable to parse application config; details: {0}")]
+    ApplicationConfigParseError(toml::de::Error),
+
+    #[error("supers was unable to read application config file; details: {0}")]
+    ApplicationConfigFileError(std::io::Error),
+
     #[error("supers was unable to start thread for program {0}; details: {1}")]
     ProgramThreadStartError(String, std::io::Error),
 

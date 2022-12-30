@@ -1,5 +1,6 @@
 use actix_web::web::Data;
 use actix_web::{App, HttpServer};
+use config::{get_app_config_from_file, ApplicationConfig, ProgramConfig, RestartPolicy};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -11,6 +12,7 @@ use state::{ApplicationState, ApplicationStatus};
 
 use programs::start_program_threads;
 
+mod config;
 mod errors;
 mod handlers;
 mod programs;
@@ -19,40 +21,8 @@ mod state;
 mod messages;
 mod playground;
 
-/// These are the available restart policies for programs
-#[derive(Clone, PartialEq)]
-pub enum RestartPolicy {
-    // Always restart the program after it exits, regardless of exit status
-    Always,
-
-    // Never restart the program, regardless of exist status
-    Never,
-
-    // Restart the program if it exited with a non-success status, otherwise, do not restart
-    OnError,
-}
-
-/// Configuration for a program to be launched and supervised by supers.
-#[derive(Clone)]
-pub struct ProgramConfig {
-    // the name of the program, used for naming the thread, logging, etc. Should be unique within a supers application
-    name: String,
-
-    // the command used to start the program
-    cmd: String,
-
-    // An array of arguments to the program's command.
-    args: Vec<String>,
-
-    // The environment variables to set before starting the program, as key-value pairs
-    env: HashMap<String, String>,
-
-    // The RestartPolicy for the program
-    restartpolicy: RestartPolicy,
-}
-
 /// Generate a test application config
-pub fn get_test_app_config() -> Vec<ProgramConfig> {
+pub fn get_test_app_config() -> ApplicationConfig {
     let p1 = ProgramConfig {
         name: String::from("sleep3"),
         cmd: String::from("/bin/sleep"),
@@ -87,7 +57,10 @@ pub fn get_test_app_config() -> Vec<ProgramConfig> {
         restartpolicy: RestartPolicy::OnError,
     };
 
-    vec![p1, p2, p3]
+    ApplicationConfig {
+        app_name: "Test App".to_string(),
+        programs: vec![p1, p2, p3],
+    }
 }
 
 /// Starts the main server thread, which proides the API for controlling running MereBlocks applications.
@@ -105,15 +78,26 @@ pub struct WebAppState {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    // get the config for this Mereblocks application and create the app_state container
-    let app_config = get_test_app_config();
+    // get the config for this Mereblocks application
+    let app_config: ApplicationConfig;
+    let app_config_file = get_app_config_from_file();
+    // for now, we'll use the test config if we are not able to read the config
+    match app_config_file {
+        Ok(a) => app_config = a,
+        Err(e) => {
+            println!("Warning: got error reading config file, using test config; error: {e}");
+            app_config = get_test_app_config();
+        }
+    };
+
+    // create the app_state container with statuses for the application status and the programs
     let app_state = Arc::new(Mutex::new(ApplicationState {
         application_status: ApplicationStatus::Running,
         programs: HashMap::new(),
     }));
 
     // start the threads for the programs configured the application
-    let (_threads, channels) = start_program_threads(app_config, &app_state).unwrap();
+    let (_threads, channels) = start_program_threads(app_config.programs, &app_state).unwrap();
 
     // send a start message to all programs
     for sx in channels.values() {

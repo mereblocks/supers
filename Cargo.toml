@@ -10,6 +10,9 @@ thiserror = "1.0"
 actix-web = "4"
 crossbeam = { version = "0.8.2", features = ["crossbeam-channel"] }
 anyhow = "1.0.68"
+serde = "1.0"
+serde_derive = "1.0"
+toml = "0.5"
 
 [dev-dependencies]
 rand = "0.8.5"

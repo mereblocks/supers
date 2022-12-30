@@ -1,0 +1,8 @@
+# Example supers application config file
+
+app_name = "My Test Application"
+
+programs = [
+    {name = "sleep", cmd = "/bin/sleep", args = ["3"], env = [], restartpolicy = "Always" },
+
+]
