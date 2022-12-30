@@ -7,7 +7,7 @@ use std::{
 };
 
 use crossbeam::channel::{unbounded, Receiver, Sender};
-use tracing::{debug, instrument};
+use tracing::{debug, debug_span, instrument};
 
 use crate::{
     errors::SupersError,
@@ -22,7 +22,9 @@ type SupersChild = Option<Child>;
 pub const WAIT_TIMEOUT: time::Duration = time::Duration::from_millis(10);
 
 /// Function to start a program with config given by, `p`, in a child process.
+#[instrument(level = "debug")]
 pub fn start_child_program(p: &ProgramConfig) -> Result<Child, SupersError> {
+    debug!("spawning child");
     Ok(Command::new(&p.cmd)
         .args(&p.args)
         .envs(&p.env)
@@ -34,11 +36,13 @@ pub fn start_child_program(p: &ProgramConfig) -> Result<Child, SupersError> {
 
 /// Update the status of program with name, `pgm_name`, to status, `status`.
 /// This function panics if it cannot lock the app_state object.
+#[instrument(level = "debug", skip(app_state))]
 pub fn update_pgm_status(
     app_state: Arc<Mutex<ApplicationState>>,
     pgm_name: &str,
     status: ProgramStatus,
 ) {
+    debug!("updating program status");
     let mut a = app_state.lock().unwrap();
     *a.programs.entry(pgm_name.into()).or_insert(status) = status;
 }
@@ -61,7 +65,8 @@ fn run_state_machine(
     app_state: Arc<Mutex<ApplicationState>>,
 ) -> Result<SupersChild, SupersError> {
     let status = get_child_status(&p.name, &mut child)?;
-    debug!(?status, "child status");
+    let _span = debug_span!("step", ?status, ?msg).entered();
+    debug!("state machine step");
     Ok(match (status, msg) {
         (ChildStatus::NoChild, None) => {
             // There is no child and no command to process.
@@ -91,6 +96,7 @@ fn run_state_machine(
         (ChildStatus::Alive, Some(CommandMsg::Stop)) => {
             // We stop the child. This is the only place where we kill the child.
             if let Some(c) = child.as_mut() {
+                debug!("stopping child");
                 c.kill().map_err(|e| {
                     SupersError::ProgramProcessKillError(p.name.clone(), e)
                 })?;
@@ -103,6 +109,7 @@ fn run_state_machine(
         }
         (ChildStatus::Alive, Some(CommandMsg::Restart)) => {
             // For restarting, we schedule two messages: Stop & Start
+            debug!("child is alive, sending Stop & Start");
             cmd_tx.send(CommandMsg::Stop)?;
             cmd_tx.send(CommandMsg::Start)?;
             // The new child is still the same. The next iterations will change
@@ -112,18 +119,22 @@ fn run_state_machine(
         (ChildStatus::Exited(code), None) => {
             // The child exited, and there is no command in the queue.
             // Let's apply the policies, if any.
+            debug!(?code, "program exited");
             update_pgm_status(app_state, &p.name, ProgramStatus::Stopped);
             match p.restartpolicy {
                 RestartPolicy::Always => {
                     // Under this policy, we **always** restart
+                    debug!("restart policy is Always. Restarting");
                     cmd_tx.send(CommandMsg::Start)?;
                 }
                 RestartPolicy::Never => {
+                    debug!("restart policy is Never. Doing nothing");
                     // Do nothing, keep in `Exited` state.
                 }
                 RestartPolicy::OnError => {
                     // We restart if `code` is an error
                     if !code.success() {
+                        debug!("program exited with error. Restarting");
                         cmd_tx.send(CommandMsg::Start)?;
                     }
                 }
@@ -142,6 +153,7 @@ fn run_state_machine(
         ) => {
             // We got a command to start or restart an exited child.
             // We resend the `Start` message and reset the child.
+            debug!("resetting child and sending Start command");
             cmd_tx.send(CommandMsg::Start)?;
             None
         }
@@ -194,8 +206,8 @@ pub fn pgm_thread(
     let mut current_child: SupersChild = None;
     loop {
         let msg = cmd_rx.recv_timeout(WAIT_TIMEOUT).ok();
-        debug!(?msg, "received command message");
-        //trace!(?msg, "received message");
+        let _span = debug_span!("message_span", ?msg).entered();
+        debug!("received command message");
         // Run next step of state machine
         // and update `current_child` if the state changed
         current_child = run_state_machine(
@@ -257,18 +269,18 @@ mod test {
         thread,
         time::Duration,
     };
-    use tracing_subscriber::{
-        filter::{self, EnvFilter, LevelFilter},
-        prelude::*,
-    };
+    use tracing_subscriber::filter::EnvFilter;
 
     use super::pgm_thread;
 
     fn init_tracing() {
         let filter = EnvFilter::builder()
-            .with_default_directive(LevelFilter::DEBUG.into())
             .with_regex(true)
-            .parse("debug,[{msg=None}]=error")
+            .with_default_directive(
+                "supers::programs[{msg=Some.*}]=debug".parse().unwrap(),
+            )
+            .from_env()
+            //.parse("[{msg=None}]=off")
             .unwrap();
         let subs = tracing_subscriber::fmt()
             .with_env_filter(filter)
