@@ -2,7 +2,16 @@
 
 app_name = "My Test Application"
 
-programs = [
-    {name = "sleep", cmd = "/bin/sleep", args = ["3"], env = [], restartpolicy = "Always" },
+[[programs]]
+name = "sleep"
+cmd = "/bin/sleep"
+args = ["3"]
+env = {}
+restartpolicy = "Always"
 
-]
+[[programs]]
+name = "ls"
+cmd = "ls"
+args = ["-l"]
+env = {}
+restartpolicy = "OnError"
