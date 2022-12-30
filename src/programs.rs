@@ -7,6 +7,7 @@ use std::{
 };
 
 use crossbeam::channel::{unbounded, Receiver, Sender};
+use tracing::{debug, instrument};
 
 use crate::{
     errors::SupersError,
@@ -51,6 +52,7 @@ pub fn update_pgm_status(
 // We pass a sender for `CommandMsg` so we can queue new commands. For example,
 // a RESTART can be processed by sending two messages in sequence to `cmd_tx`: STOP,
 // and then START.
+#[instrument(level = "debug", skip_all, fields(program = p.name, msg = ?msg))]
 fn run_state_machine(
     mut child: SupersChild,
     msg: Option<CommandMsg>,
@@ -59,6 +61,7 @@ fn run_state_machine(
     app_state: Arc<Mutex<ApplicationState>>,
 ) -> Result<SupersChild, SupersError> {
     let status = get_child_status(&p.name, &mut child)?;
+    debug!(?status, "child status");
     Ok(match (status, msg) {
         (ChildStatus::NoChild, None) => {
             // There is no child and no command to process.
@@ -145,6 +148,7 @@ fn run_state_machine(
     })
 }
 
+#[derive(Debug)]
 enum ChildStatus {
     NoChild,
     Alive,
@@ -179,15 +183,19 @@ fn get_child_status(
 /// Function to start and monitor a process while also monitoring and processing the
 /// associated command channel for a specific program.
 ///
+#[instrument(level = "debug", skip_all, fields(program = p.name))]
 pub fn pgm_thread(
     p: ProgramConfig,
     app_state: Arc<Mutex<ApplicationState>>,
     cmd_tx: Sender<CommandMsg>,
     cmd_rx: Receiver<CommandMsg>,
 ) -> Result<(), SupersError> {
+    debug!("starting program thread");
     let mut current_child: SupersChild = None;
     loop {
         let msg = cmd_rx.recv_timeout(WAIT_TIMEOUT).ok();
+        debug!(?msg, "received command message");
+        //trace!(?msg, "received message");
         // Run next step of state machine
         // and update `current_child` if the state changed
         current_child = run_state_machine(
@@ -239,6 +247,9 @@ pub fn start_program_threads(
 
 #[cfg(test)]
 mod test {
+    use crate::{
+        get_test_app_config, messages::CommandMsg, state::ApplicationState,
+    };
     use anyhow::Result;
     use crossbeam::channel::{select, unbounded};
     use std::{
@@ -246,15 +257,29 @@ mod test {
         thread,
         time::Duration,
     };
-
-    use crate::{
-        get_test_app_config, messages::CommandMsg, state::ApplicationState,
+    use tracing_subscriber::{
+        filter::{self, EnvFilter, LevelFilter},
+        prelude::*,
     };
 
     use super::pgm_thread;
 
+    fn init_tracing() {
+        let filter = EnvFilter::builder()
+            .with_default_directive(LevelFilter::DEBUG.into())
+            .with_regex(true)
+            .parse("debug,[{msg=None}]=error")
+            .unwrap();
+        let subs = tracing_subscriber::fmt()
+            .with_env_filter(filter)
+            .with_thread_names(true)
+            .finish();
+        let _ = tracing::subscriber::set_global_default(subs);
+    }
+
     #[test]
     fn test_state_machine() -> Result<()> {
+        init_tracing();
         let p = get_test_app_config()[2].clone();
         let app_state = Arc::new(Mutex::new(ApplicationState::default()));
         let (s, r) = unbounded();

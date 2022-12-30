@@ -20,7 +20,7 @@ mod messages;
 mod playground;
 
 /// These are the available restart policies for programs
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum RestartPolicy {
     // Always restart the program after it exits, regardless of exit status
     Always,
@@ -33,7 +33,7 @@ pub enum RestartPolicy {
 }
 
 /// Configuration for a program to be launched and supervised by supers.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ProgramConfig {
     // the name of the program, used for naming the thread, logging, etc. Should be unique within a supers application
     name: String,
