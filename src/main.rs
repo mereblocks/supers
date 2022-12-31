@@ -1,5 +1,7 @@
 use actix_web::web::Data;
 use actix_web::{App, HttpServer};
+use log::init_tracing;
+use tracing_actix_web::TracingLogger;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -13,10 +15,11 @@ use programs::start_program_threads;
 
 mod errors;
 mod handlers;
+mod log;
+mod messages;
 mod programs;
 mod state;
 // TODO: This is just a module for playing with ideas. Remove before production.
-mod messages;
 mod playground;
 
 /// These are the available restart policies for programs
@@ -106,6 +109,7 @@ pub struct WebAppState {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // get the config for this Mereblocks application and create the app_state container
+    init_tracing();
     let app_config = get_test_app_config();
     let app_state = Arc::new(Mutex::new(ApplicationState {
         application_status: ApplicationStatus::Running,
@@ -113,7 +117,8 @@ async fn main() -> std::io::Result<()> {
     }));
 
     // start the threads for the programs configured the application
-    let (_threads, channels) = start_program_threads(app_config, &app_state).unwrap();
+    let (_threads, channels) =
+        start_program_threads(app_config, &app_state).unwrap();
 
     // send a start message to all programs
     for sx in channels.values() {
@@ -128,6 +133,7 @@ async fn main() -> std::io::Result<()> {
     // Start the HTTP server
     HttpServer::new(move || {
         App::new()
+            .wrap(TracingLogger::default())
             .app_data(Data::new(webapp_state.clone()))
             .service(handlers::ready)
             .service(handlers::get_app_status)

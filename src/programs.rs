@@ -222,20 +222,25 @@ pub fn pgm_thread(
 
 /// Type alias for the start_program_threads return type; A tuple type containing the thread handles for each thread
 /// started as well as a hashmap of the command channels created for each program in the App config.
-type ProgramControls =
-    (Vec<JoinHandle<()>>, HashMap<String, Sender<CommandMsg>>);
+type ProgramControls = (
+    Vec<JoinHandle<Result<(), SupersError>>>,
+    HashMap<String, Sender<CommandMsg>>,
+);
 
 /// Main entrypoint for the programs.rs module; For each program in the app_config, this function:
 /// 1) creates a command channel to process commands from the administrative API
 /// 2) starts a thread to run and monitor the program, passing in the command channel.
+#[instrument(level = "debug", skip_all)]
 pub fn start_program_threads(
     app_config: Vec<ProgramConfig>,
     app_state: &Arc<Mutex<ApplicationState>>,
 ) -> Result<ProgramControls, SupersError> {
-    let mut handles: Vec<JoinHandle<()>> = vec![];
+    let mut handles = vec![];
     let mut send_channels = HashMap::new();
     // start a thread for each program in the config
+    debug!("starting threads for all programs");
     for program in app_config {
+        debug!(program = program.name, "starting thread for program");
         let p = program.clone();
         let t = thread::Builder::new().name(program.name);
         let program_name = p.name.clone();
@@ -244,9 +249,8 @@ pub fn start_program_threads(
         let app_state_clone = app_state.clone();
         send_channels.insert(program_name.to_string(), tx);
         let handle = t
-            .spawn(move || {
-                println!("Starting supers thread for program {}...", p.name);
-                let _result = pgm_thread(p, app_state_clone, thread_tx, rx);
+            .spawn(move || -> Result<(), SupersError> {
+                pgm_thread(p, app_state_clone, thread_tx, rx)
             })
             .map_err(|e| {
                 SupersError::ProgramThreadStartError(program_name, e)
@@ -260,7 +264,8 @@ pub fn start_program_threads(
 #[cfg(test)]
 mod test {
     use crate::{
-        get_test_app_config, messages::CommandMsg, state::ApplicationState,
+        get_test_app_config, log::init_tracing, messages::CommandMsg,
+        state::ApplicationState,
     };
     use anyhow::Result;
     use crossbeam::channel::{select, unbounded};
@@ -269,25 +274,8 @@ mod test {
         thread,
         time::Duration,
     };
-    use tracing_subscriber::filter::EnvFilter;
 
     use super::pgm_thread;
-
-    fn init_tracing() {
-        let filter = EnvFilter::builder()
-            .with_regex(true)
-            .with_default_directive(
-                "supers::programs[{msg=Some.*}]=debug".parse().unwrap(),
-            )
-            .from_env()
-            //.parse("[{msg=None}]=off")
-            .unwrap();
-        let subs = tracing_subscriber::fmt()
-            .with_env_filter(filter)
-            .with_thread_names(true)
-            .finish();
-        let _ = tracing::subscriber::set_global_default(subs);
-    }
 
     #[test]
     fn test_state_machine() -> Result<()> {
