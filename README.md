@@ -16,6 +16,16 @@ cargo build
 
 The `supers` administrative API listens on port 8080.
 
+
+## Configure
+Create a toml file either in the default path (`/etc/supers/conf.toml`) or specify a custom path using the `SUPERS_CONF_FILE`
+enironment variable, e.g., 
+
+```
+$ export SUPERS_CONF_FILE=/home/jstubbs/gits/mereblocks/supers/ex_config.toml
+```
+
+
 ## Endpoints
 
 The `supers` administrative API provides the following endpoints:
