@@ -280,7 +280,7 @@ mod test {
     #[test]
     fn test_state_machine() -> Result<()> {
         init_tracing();
-        let p = get_test_app_config()[2].clone();
+        let p = get_test_app_config().programs[2].clone();
         let app_state = Arc::new(Mutex::new(ApplicationState::default()));
         let (s, r) = unbounded();
         let t;

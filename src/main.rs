@@ -84,6 +84,7 @@ async fn main() -> std::io::Result<()> {
     init_tracing();
     // get the config for this Mereblocks application
     let app_config: ApplicationConfig;
+    let app_config_file = get_app_config_from_file();
     // for now, we'll use the test config if we are not able to read the config
     match app_config_file {
         Ok(a) => app_config = a,

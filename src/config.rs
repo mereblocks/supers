@@ -19,7 +19,7 @@ pub enum RestartPolicy {
 }
 
 /// Configuration for a program to be launched and supervised by supers.
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, Debug)]
 pub struct ProgramConfig {
     /// The name of the program, used for naming the thread, logging, etc. Should be unique within a supers application
     pub name: String,
