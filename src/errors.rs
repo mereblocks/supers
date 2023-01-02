@@ -4,6 +4,7 @@ use thiserror::Error;
 use crate::messages::CommandMsg;
 
 /// SupersError enumerates all possible error types returned by supers.
+#[allow(clippy::enum_variant_names)]
 #[derive(Error, Debug)]
 pub enum SupersError {
     #[error("supers was unable to parse application config; details: {0}")]

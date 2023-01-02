@@ -1,10 +1,12 @@
 use actix_web::web::Data;
 use actix_web::{App, HttpServer};
+use config::{
+    get_app_config_from_file, ApplicationConfig, ProgramConfig, RestartPolicy,
+};
 use log::init_tracing;
-use tracing_actix_web::TracingLogger;
-use config::{get_app_config_from_file, ApplicationConfig, ProgramConfig, RestartPolicy};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use tracing_actix_web::TracingLogger;
 
 use crossbeam::channel::Sender;
 
@@ -83,14 +85,13 @@ pub struct WebAppState {
 async fn main() -> std::io::Result<()> {
     init_tracing();
     // get the config for this Mereblocks application
-    let app_config: ApplicationConfig;
     let app_config_file = get_app_config_from_file();
     // for now, we'll use the test config if we are not able to read the config
-    match app_config_file {
-        Ok(a) => app_config = a,
+    let app_config = match app_config_file {
+        Ok(a) => a,
         Err(e) => {
             println!("Warning: got error reading config file, using test config; error: {e}");
-            app_config = get_test_app_config();
+            get_test_app_config()
         }
     };
 
@@ -101,7 +102,8 @@ async fn main() -> std::io::Result<()> {
     }));
 
     // start the threads for the programs configured the application
-    let (_threads, channels) = start_program_threads(app_config.programs, &app_state).unwrap();
+    let (_threads, channels) =
+        start_program_threads(app_config.programs, &app_state).unwrap();
 
     // send a start message to all programs
     for sx in channels.values() {

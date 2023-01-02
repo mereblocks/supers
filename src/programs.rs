@@ -25,13 +25,13 @@ pub const WAIT_TIMEOUT: time::Duration = time::Duration::from_millis(10);
 #[instrument(level = "debug")]
 pub fn start_child_program(p: &ProgramConfig) -> Result<Child, SupersError> {
     debug!("spawning child");
-    Ok(Command::new(&p.cmd)
+    Command::new(&p.cmd)
         .args(&p.args)
         .envs(&p.env)
         .spawn()
         .map_err(|e| {
             SupersError::ProgramProcessSpawnError(p.name.to_string(), e)
-        })?)
+        })
 }
 
 /// Update the status of program with name, `pgm_name`, to status, `status`.
