@@ -132,7 +132,10 @@ mod test {
                     Ok(x) => println!("From thread 1 got {x}"),
                     Err(_) => {
                         println!("Thread 1 got error, removing it");
-                        println!("Time elapsed from start: {}", start.elapsed().as_secs());
+                        println!(
+                            "Time elapsed from start: {}",
+                            start.elapsed().as_secs()
+                        );
                         sel.remove(index1);
                         indices.remove(&index1);
                     }
@@ -142,7 +145,10 @@ mod test {
                     Ok(x) => println!("From thread 1 got {x}"),
                     Err(_) => {
                         println!("Thread 2 got error, removing it");
-                        println!("Time elapsed from start: {}", start.elapsed().as_secs());
+                        println!(
+                            "Time elapsed from start: {}",
+                            start.elapsed().as_secs()
+                        );
                         sel.remove(index2);
                         indices.remove(&index2);
                     }

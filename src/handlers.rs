@@ -111,7 +111,8 @@ pub async fn restart_program(
     // get the channel associated with this program and send it a restart message
     let tx = data.channels.get(name).unwrap();
     if let Ok(_r) = tx.send(CommandMsg::Restart) {
-        let body = format!("Program {} has been instructed to restart.\n", name);
+        let body =
+            format!("Program {} has been instructed to restart.\n", name);
         HttpResponse::Ok().body(body)
     } else {
         let body = format!("Error sending message to {} channel\n", name);
