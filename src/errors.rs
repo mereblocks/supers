@@ -42,4 +42,10 @@ pub enum SupersError {
         #[from]
         source: SendError<CommandMsg>,
     },
+
+    #[error("supers got an io error")]
+    ApplicationIOError {
+        #[from]
+        source: std::io::Error,
+    }
 }

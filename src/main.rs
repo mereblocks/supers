@@ -6,6 +6,7 @@ use config::{
 use log::init_tracing;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use tracing::{debug_span, info, warn};
 use tracing_actix_web::TracingLogger;
 
 use crossbeam::channel::Sender;
@@ -71,7 +72,7 @@ pub fn get_test_app_config() -> ApplicationConfig {
 /// Starts the main server thread, which proides the API for controlling running MereBlocks applications.
 pub fn start_server_thread() -> Result<(), SupersError> {
     // todo: need to design how this thread will update the application state/config.
-    println!("Starting server thread...");
+    info!("Starting server thread...");
     Ok(())
 }
 
@@ -82,17 +83,18 @@ pub struct WebAppState {
 }
 
 #[actix_web::main]
-async fn main() -> std::io::Result<()> {
+async fn main() -> Result<(), SupersError> {
     init_tracing();
-    // get the config for this Mereblocks application
-    let app_config_file = get_app_config_from_file();
-    // for now, we'll use the test config if we are not able to read the config
-    let app_config = match app_config_file {
-        Ok(a) => a,
-        Err(e) => {
-            println!("Warning: got error reading config file, using test config; error: {e}");
+
+    let app_config = {
+        let _span = debug_span!("config").entered();
+        // get the config for this Mereblocks application
+        get_app_config_from_file().unwrap_or_else(|e| {
+            // for now, we'll use the test config if we are not able to read the config
+            warn!("Error reading config file: {e}");
+            warn!("Using test config");
             get_test_app_config()
-        }
+        })
     };
 
     // create the app_state container with statuses for the application status and the programs
@@ -107,7 +109,7 @@ async fn main() -> std::io::Result<()> {
 
     // send a start message to all programs
     for sx in channels.values() {
-        let _r = sx.send(CommandMsg::Start);
+        sx.send(CommandMsg::Start)?;
     }
     // create the webapp state object with the command hannels used to communicate with the threads
     let webapp_state = WebAppState {
@@ -131,8 +133,9 @@ async fn main() -> std::io::Result<()> {
     })
     .bind(("127.0.0.1", 8080))?
     .run()
-    .await
+    .await?;
 
+    Ok(())
     // for t in threads {
     //     t.join().unwrap();
     // }
