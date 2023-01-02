@@ -118,6 +118,7 @@ async fn main() -> std::io::Result<()> {
     // Start the HTTP server
     HttpServer::new(move || {
         App::new()
+            .wrap(actix_web::middleware::Logger::default())
             .wrap(TracingLogger::default())
             .app_data(Data::new(webapp_state.clone()))
             .service(handlers::ready)

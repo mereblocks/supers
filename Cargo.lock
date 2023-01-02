@@ -1047,6 +1047,7 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-actix-web",
+ "tracing-log",
  "tracing-subscriber",
 ]
 
