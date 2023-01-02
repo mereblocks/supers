@@ -49,9 +49,7 @@ pub struct ApplicationConfig {
 pub fn get_app_config_from_str(
     s: String,
 ) -> Result<ApplicationConfig, SupersError> {
-    let config: ApplicationConfig =
-        toml::from_str(&s).map_err(SupersError::ApplicationConfigParseError)?;
-    Ok(config)
+    toml::from_str(&s).map_err(SupersError::ApplicationConfigParseError)
 }
 
 const DEFAULT_CONFIG_PATH: &str = "/etc/supers/conf.toml";
@@ -66,7 +64,5 @@ pub fn get_app_config_from_file() -> Result<ApplicationConfig, SupersError> {
         .map_err(SupersError::ApplicationConfigFileError)?;
 
     // convert to config object
-    let config = get_app_config_from_str(config_file_text)?;
-
-    Ok(config)
+    get_app_config_from_str(config_file_text)
 }
