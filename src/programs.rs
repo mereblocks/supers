@@ -195,9 +195,9 @@ fn get_child_status(
 /// Function to start and monitor a process while also monitoring and processing the
 /// associated command channel for a specific program.
 ///
-#[instrument(level = "debug", skip_all, fields(program = p.name))]
+#[instrument(level = "debug", skip_all, fields(program = program_config.name))]
 pub fn pgm_thread(
-    p: ProgramConfig,
+    program_config: &ProgramConfig,
     app_state: Arc<Mutex<ApplicationState>>,
     cmd_tx: Sender<CommandMsg>,
     cmd_rx: Receiver<CommandMsg>,
@@ -214,7 +214,7 @@ pub fn pgm_thread(
             current_child,
             msg,
             cmd_tx.clone(),
-            &p,
+            program_config,
             app_state.clone(),
         )?;
     }
@@ -241,21 +241,23 @@ pub fn start_program_threads(
     debug!("starting threads for all programs");
     for program in app_config {
         debug!(program = program.name, "starting thread for program");
-        let p = program.clone();
-        let t = thread::Builder::new().name(program.name);
-        let program_name = p.name.clone();
         let (tx, rx) = unbounded::<CommandMsg>();
-        let thread_tx = tx.clone();
-        let app_state_clone = app_state.clone();
-        send_channels.insert(program_name.to_string(), tx);
-        let handle = t
-            .spawn(move || -> Result<(), SupersError> {
-                pgm_thread(p, app_state_clone, thread_tx, rx)
-            })
-            .map_err(|e| {
-                SupersError::ProgramThreadStartError(program_name, e)
-            })?;
-        handles.push(handle);
+        {
+            let program = program.clone();
+            let program_name = program.name.clone();
+            let tx = tx.clone();
+            let app_state = app_state.clone();
+            let handle = thread::Builder::new()
+                .name(program_name.clone())
+                .spawn(move || -> Result<(), SupersError> {
+                    pgm_thread(&program, app_state, tx, rx)
+                })
+                .map_err(|e| {
+                    SupersError::ProgramThreadStartError(program_name, e)
+                })?;
+            handles.push(handle);
+        }
+        send_channels.insert(program.name.clone(), tx);
     }
 
     Ok((handles, send_channels))
@@ -288,7 +290,7 @@ mod test {
             let s = s.clone();
             let app_state = app_state.clone();
             t = thread::spawn(move || -> Result<()> {
-                Ok(pgm_thread(p, app_state, s, r)?)
+                Ok(pgm_thread(&p, app_state, s, r)?)
             });
         }
         s.send(CommandMsg::Start)?;
