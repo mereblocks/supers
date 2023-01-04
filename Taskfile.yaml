@@ -1,0 +1,23 @@
+version: '3'
+
+vars:
+  RUST_LOG: "actix=debug,supers=debug"
+  FILTER: "true"
+
+env:
+  RUST_LOG: "{{.RUST_LOG}}"
+
+tasks:
+  run:
+    desc: "`cargo run` with log filtering"
+    summary: |
+      Use the variable `RUST_LOG` to select the modules and levels for logging.
+
+      Use the variable `FILTER` to specify a `jq`-style filter expression.
+
+      Example:
+          task run RUST_LOG=mymodule=debug FILTER='.mykey=="value"'
+
+      `FILTER` defaults to `true` (i.e., all events are printed).
+    cmds:
+      - cargo run 2>&1 | jq -R 'fromjson? | select({{.FILTER}})'
