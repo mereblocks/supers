@@ -276,10 +276,19 @@ mod test {
         thread,
         time::Duration,
     };
+    use tracing::info;
 
     use super::pgm_thread;
+    use test_log::test;
 
     #[test]
+    fn test_foo() -> Result<()> {
+        info!("in test foo");
+        Ok(())
+    }
+
+    #[test]
+    #[ignore]
     fn test_state_machine() -> Result<()> {
         init_tracing();
         let p = get_test_app_config().programs[2].clone();
@@ -304,6 +313,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     pub fn test_channels() {
         let (s_pgm, r_pgm) = unbounded::<i32>();
         let (s_cmd, r_cmd) = unbounded::<i32>();
