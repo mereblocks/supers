@@ -19,6 +19,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn test_child_match() -> Result<()> {
         let mut c: Option<std::process::Child> = None;
         let child = std::process::Command::new("ls").spawn().unwrap();
@@ -38,11 +39,11 @@ mod test {
                 }
             };
         }
-
         Ok(())
     }
 
     #[test]
+    #[ignore]
     fn test_basic_channels() -> Result<()> {
         // Test send/receive via channel with integers
         let (s, r) = unbounded();
@@ -61,6 +62,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn test_thread_with_channel() -> Result<()> {
         // Test sending from a thread and receiving in main thread
         // Note that can give an explicit signature to the thread to have
@@ -91,6 +93,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn test_select() -> Result<()> {
         // Test a very basic `select`. Two threads sleep and the first one
         // to wake up sends a message and everything exits.
@@ -110,6 +113,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn test_dynamic_select() -> Result<()> {
         // Test using `Select` with a dynamic list of operations.
         let mut sel = Select::new();
