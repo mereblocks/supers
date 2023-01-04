@@ -1,5 +1,5 @@
 use tracing_log::LogTracer;
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{EnvFilter, Registry};
 
 // Convenience function to initialize tracing.
 // It sets a default directive to ignore logs with empty messages, and
@@ -8,14 +8,21 @@ pub fn init_tracing() {
     LogTracer::init().expect("cannot init logger");
     let filter = EnvFilter::builder()
         .with_regex(true)
-        .with_default_directive(
-            "supers::programs[{msg=Some.*}]=debug".parse().unwrap(),
-        )
+        .with_default_directive("supers=debug".parse().unwrap())
         .from_env()
-        .unwrap();
+        .expect("error parsing RUST_LOG environment variable");
     let subs = tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_thread_names(true)
+        .json()
+        .flatten_event(true)
+        .with_writer(std::io::stderr)
         .finish();
+    // let formatting_layer =
+    //     BunyanFormattingLayer::new("supers".into(), std::io::stderr)
+    //         .with_filter(filter);
+    // let subscriber = Registry::default()
+    //     .with(JsonStorageLayer)
+    //     .with(formatting_layer);
     let _ = tracing::subscriber::set_global_default(subs);
 }
