@@ -16,6 +16,12 @@ cargo build
 
 The `supers` administrative API listens on port 8080.
 
+### Using Nix for developing
+
+1. Install [Nix](https://nixos.org/download.html).
+2. Run `nix build` for building the crate.
+3. Run `nix develop` to spawn a shell with the tools needed for developing `supers`.
+
 
 ## Configure
 Create a toml file either in the default path (`/etc/supers/conf.toml`) or specify a custom path using the `SUPERS_CONF_FILE`
