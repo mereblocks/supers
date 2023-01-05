@@ -1,5 +1,5 @@
 use tracing_log::LogTracer;
-use tracing_subscriber::{EnvFilter, Registry};
+use tracing_subscriber::EnvFilter;
 
 // Convenience function to initialize tracing.
 // It sets a default directive to ignore logs with empty messages, and
