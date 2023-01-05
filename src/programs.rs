@@ -47,6 +47,169 @@ pub fn update_pgm_status(
     *a.programs.entry(pgm_name.into()).or_insert(status) = status;
 }
 
+enum Action {
+    ResetChild,
+    SpawnChild,
+    KillChild,
+    ApplyPolicy(ExitStatus),
+    UpdateStatus(ProgramStatus),
+}
+
+fn run_state_machine_with_effects(
+    program_config: &ProgramConfig,
+    app_state: Arc<Mutex<ApplicationState>>,
+    cmd_tx: Sender<CommandMsg>,
+    cmd_rx: Receiver<CommandMsg>,
+) -> Result<(), SupersError> {
+    let mut current_child: SupersChild = None;
+    loop {
+        let msg = cmd_rx.recv_timeout(WAIT_TIMEOUT).ok();
+        let status =
+            get_child_status(&program_config.name, &mut current_child)?;
+        let actions = state_machine_step(&status, &msg);
+        run_actions(
+            &actions,
+            &mut current_child,
+            &cmd_tx,
+            program_config,
+            app_state.clone(),
+        )?;
+    }
+}
+
+fn state_machine_step(
+    status: &ChildStatus,
+    msg: &Option<CommandMsg>,
+) -> Vec<Action> {
+    match (status, msg) {
+        (ChildStatus::NoChild, None) => {
+            // There is no child and no command to process.
+            // Definitely nothing to do here.
+            vec![]
+        }
+        (ChildStatus::NoChild, Some(CommandMsg::Start)) => {
+            vec![
+                Action::SpawnChild,
+                Action::UpdateStatus(ProgramStatus::Running),
+            ]
+        }
+        (
+            ChildStatus::NoChild,
+            Some(CommandMsg::Restart | CommandMsg::Stop),
+        ) => {
+            // If we don't have a child, `Stop` does nothing.
+            // TODO: Do we want `Restart` to spawn a child?
+            vec![]
+        }
+        (ChildStatus::Alive, None) => {
+            // Everything running smoothly and no command. Don't disturb it :-)
+            vec![]
+        }
+        (ChildStatus::Alive, Some(CommandMsg::Start)) => {
+            // Child is running, so no sense in "starting" it. Do nothing.
+            vec![]
+        }
+        (ChildStatus::Alive, Some(CommandMsg::Stop)) => {
+            vec![
+                Action::KillChild,
+                Action::UpdateStatus(ProgramStatus::Stopped),
+                Action::ResetChild,
+            ]
+        }
+        (ChildStatus::Alive, Some(CommandMsg::Restart)) => {
+            vec![Action::KillChild, Action::SpawnChild]
+        }
+        (ChildStatus::Exited(code), None) => {
+            // The child exited, and there is no command in the queue.
+            // Let's apply the policies, if any.
+            vec![Action::ApplyPolicy(*code)]
+        }
+        (ChildStatus::Exited(_), Some(CommandMsg::Stop)) => {
+            // Child has exited, so we ignore the `Stop` command
+            vec![]
+        }
+        (
+            ChildStatus::Exited(_),
+            Some(CommandMsg::Start | CommandMsg::Restart),
+        ) => {
+            // Child has exited, so we ignore the `Stop` command
+            vec![
+                Action::SpawnChild,
+                Action::UpdateStatus(ProgramStatus::Running),
+            ]
+        }
+    }
+}
+
+fn run_actions(
+    actions: &[Action],
+    child: &mut SupersChild,
+    tx: &Sender<CommandMsg>,
+    program_config: &ProgramConfig,
+    app_state: Arc<Mutex<ApplicationState>>,
+) -> Result<(), SupersError> {
+    for action in actions {
+        run_action(action, child, tx, program_config, app_state.clone())?;
+    }
+    Ok(())
+}
+
+fn run_action(
+    action: &Action,
+    child: &mut SupersChild,
+    tx: &Sender<CommandMsg>,
+    program_config: &ProgramConfig,
+    app_state: Arc<Mutex<ApplicationState>>,
+) -> Result<(), SupersError> {
+    match action {
+        Action::ResetChild => {
+            *child = None;
+        }
+        Action::SpawnChild => {
+            *child = Some(start_child_program(program_config)?);
+        }
+        Action::KillChild => {
+            child
+                .as_mut()
+                .map(|c| {
+                    c.kill().map_err(|e| {
+                        SupersError::ProgramProcessKillError(
+                            program_config.name.clone(),
+                            e,
+                        )
+                    })
+                })
+                .unwrap_or_else(|| {
+                    unreachable!(
+                        "Asked to kill non-existent child. This is a bug."
+                    )
+                })?;
+        }
+        Action::ApplyPolicy(code) => {
+            match program_config.restartpolicy {
+                RestartPolicy::Always => {
+                    // Under this policy, we **always** restart
+                    tx.send(CommandMsg::Start)?;
+                }
+                RestartPolicy::Never => {
+                    // Do nothing, keep in `Exited` state.
+                }
+                RestartPolicy::OnError => {
+                    // We restart if `code` is an error
+                    if !code.success() {
+                        debug!("program exited with error. Restarting");
+                        tx.send(CommandMsg::Start)?;
+                    }
+                }
+            }
+        }
+        Action::UpdateStatus(status) => {
+            update_pgm_status(app_state, &program_config.name, *status);
+        }
+    }
+    Ok(())
+}
+
 // Process next step in the state machine.
 // The states of the machine are values of type `ChildStatus`.
 // The transitions are generated by values of type `Option<CommandMsg>` plus
@@ -56,14 +219,15 @@ pub fn update_pgm_status(
 // We pass a sender for `CommandMsg` so we can queue new commands. For example,
 // a RESTART can be processed by sending two messages in sequence to `cmd_tx`: STOP,
 // and then START.
-#[instrument(level = "debug", skip_all, fields(program = p.name, msg = ?msg))]
+#[instrument(level = "debug", skip_all, fields(program = p.name, mesg = ?msg))]
 fn run_state_machine(
-    mut child: SupersChild,
+    child: SupersChild,
     msg: Option<CommandMsg>,
     cmd_tx: Sender<CommandMsg>,
     p: &ProgramConfig,
     app_state: Arc<Mutex<ApplicationState>>,
 ) -> Result<SupersChild, SupersError> {
+    let mut child = child;
     let status = get_child_status(&p.name, &mut child)?;
     let _span = debug_span!("step", ?status, ?msg).entered();
     debug!("state machine step");
