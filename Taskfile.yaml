@@ -20,4 +20,4 @@ tasks:
 
       `FILTER` defaults to `true` (i.e., all events are printed).
     cmds:
-      - cargo run 2>&1 | jq -R 'fromjson? | select({{.FILTER}})'
+      - cargo run 2>&1 | jq -c -R 'fromjson? | select({{.FILTER}})' | fblog -d

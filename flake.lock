@@ -42,6 +42,22 @@
         "type": "github"
       }
     },
+    "fblog": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1672869118,
+        "narHash": "sha256-o9u6J19W+oPScB6Z0Fnof9GooMBKmYPkDhh07DiRGnI=",
+        "owner": "brocode",
+        "repo": "fblog",
+        "rev": "0ecc0c88343aa73c210772fc42cf5b95725fe5c6",
+        "type": "github"
+      },
+      "original": {
+        "owner": "brocode",
+        "repo": "fblog",
+        "type": "github"
+      }
+    },
     "flake-compat": {
       "flake": false,
       "locked": {
@@ -259,6 +275,7 @@
     "root": {
       "inputs": {
         "crane": "crane",
+        "fblog": "fblog",
         "flake-utils": "flake-utils_2",
         "nixpkgs": "nixpkgs_2",
         "shell-utils": "shell-utils",

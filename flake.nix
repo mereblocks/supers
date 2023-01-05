@@ -7,9 +7,13 @@
     crane.url = "github:ipetkov/crane";
     shell-utils.url = "github:waltermoreira/shell-utils";
     taskdep.url = "github:waltermoreira/taskdep";
+    fblog = {
+      url = "github:brocode/fblog";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs, flake-utils, crane, shell-utils, taskdep }:
+  outputs = { self, nixpkgs, flake-utils, crane, shell-utils, taskdep, fblog }:
 
     with flake-utils.lib; eachSystem [
       system.x86_64-linux
@@ -30,10 +34,18 @@
                 libiconv
               ];
             };
+          packages.fblog =
+            craneLib.buildPackage {
+              src = fblog;
+              buildInputs = with pkgs; [
+                libiconv
+              ];
+            };
           packages.default = packages.supers;
           devShells.default = shell {
             packages = with pkgs; [
               packages.supers
+              packages.fblog
               cargo
               rustc
               jq

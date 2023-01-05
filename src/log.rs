@@ -14,7 +14,10 @@ pub fn init_tracing() {
     let subs = tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_thread_names(true)
+        .with_line_number(true)
+        .with_file(true)
         .json()
+        .with_span_list(false)
         .flatten_event(true)
         .with_writer(std::io::stderr)
         .finish();
