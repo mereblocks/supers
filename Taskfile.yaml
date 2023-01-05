@@ -21,3 +21,8 @@ tasks:
       `FILTER` defaults to `true` (i.e., all events are printed).
     cmds:
       - cargo run 2>&1 | jq -c -R 'fromjson? | select({{.FILTER}})' | fblog -d
+
+  test:
+    desc: "run tests and display logs"
+    cmds:
+      - cargo test -- --nocapture
