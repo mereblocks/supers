@@ -7,7 +7,7 @@ use std::{
 };
 
 use crossbeam::channel::{unbounded, Receiver, Sender};
-use tracing::{debug, debug_span, instrument};
+use tracing::{debug, debug_span, instrument, warn};
 
 use crate::{
     errors::SupersError,
@@ -188,12 +188,14 @@ fn run_action(
             child
                 .as_mut()
                 .map(|c| {
-                    c.kill().map_err(|e| {
-                        SupersError::ProgramProcessKillError(
-                            program_config.name.clone(),
-                            e,
-                        )
-                    })
+                    c.kill().unwrap_or_else(|e| {
+                        warn!(
+                            pid = c.id(),
+                            error = ?e,
+                            "process already exited"
+                        );
+                    });
+                    c.wait()
                 })
                 .unwrap_or_else(|| {
                     unreachable!(
@@ -303,32 +305,18 @@ pub fn start_program_threads(
 #[cfg(test)]
 mod test {
     use crate::{
-        config::ProgramConfig,
-        get_test_app_config,
+        config::{ProgramConfig, RestartPolicy},
         messages::CommandMsg,
-        programs::{
-            run_action, run_state_machine_with_effects, state_machine_step,
-            Action, ChildStatus,
-        },
-        state::{ApplicationState, ApplicationStatus, ProgramStatus},
+        programs::{run_action, state_machine_step, Action, ChildStatus},
+        state::ProgramStatus,
     };
     use anyhow::Result;
-    use crossbeam::channel::{select, unbounded};
+    use crossbeam::channel::unbounded;
     use std::{
         process::Command,
         sync::{Arc, Mutex},
-        thread,
-        time::Duration,
     };
-    use tracing::info;
-
     use test_log::test;
-
-    #[test]
-    fn test_foo() -> Result<()> {
-        info!("in test foo");
-        Ok(())
-    }
 
     #[test]
     fn test_state_machine_step() -> Result<()> {
@@ -359,97 +347,60 @@ mod test {
         let mut child = Some(Command::new("cat").spawn()?);
         run_action(&Action::ResetChild, &mut child, &sx, &p, s.clone())?;
         assert!(child.is_none());
+
+        let p = ProgramConfig {
+            name: "cat".into(),
+            cmd: "cat".into(),
+            ..Default::default()
+        };
+        run_action(&Action::SpawnChild, &mut child, &sx, &p, s.clone())?;
+        assert!(child.is_some());
+        run_action(&Action::KillChild, &mut child, &sx, &p, s.clone())?;
+        run_action(&Action::KillChild, &mut child, &sx, &p, s.clone())?;
+        child.as_mut().unwrap().wait()?;
+        run_action(&Action::KillChild, &mut child, &sx, &p, s.clone())?;
+
+        let status = Command::new("true").spawn()?.wait()?;
+        run_action(
+            &Action::ApplyPolicy(status),
+            &mut child,
+            &sx,
+            &p,
+            s.clone(),
+        )?;
+        // Default policy is restart always
+        let resp = rx.recv()?;
+        assert_eq!(resp, CommandMsg::Start);
+
+        let p = ProgramConfig {
+            name: "cat".into(),
+            cmd: "cat".into(),
+            restartpolicy: RestartPolicy::OnError,
+            ..Default::default()
+        };
+        run_action(
+            &Action::ApplyPolicy(status),
+            &mut child,
+            &sx,
+            &p,
+            s.clone(),
+        )?;
+        // Should not restart on success
+        let resp = rx.try_recv();
+        assert!(resp.is_err());
+
+        let status = Command::new("false").spawn()?.wait()?;
+        run_action(
+            &Action::ApplyPolicy(status),
+            &mut child,
+            &sx,
+            &p,
+            s.clone(),
+        )?;
+        // Should restart on error
+        let resp = rx.recv()?;
+        assert_eq!(resp, CommandMsg::Start);
+
         Ok(())
-    }
-
-    #[test]
-    #[ignore]
-    fn test_state_machine() -> Result<()> {
-        let p = get_test_app_config().programs[2].clone();
-        let app_state = Arc::new(Mutex::new(ApplicationState::default()));
-        let (s, r) = unbounded();
-        let t;
-        {
-            let s = s.clone();
-            let app_state = app_state.clone();
-            t = thread::spawn(move || -> Result<()> {
-                Ok(run_state_machine_with_effects(&p, app_state, s, r)?)
-            });
-        }
-        s.send(CommandMsg::Start)?;
-        thread::sleep(Duration::from_secs(2));
-        println!("State: {:?}", app_state.lock().unwrap());
-        s.send(CommandMsg::Start)?;
-        thread::sleep(Duration::from_secs(2));
-        println!("State: {:?}", app_state.lock().unwrap());
-        t.join().unwrap().unwrap();
-        Ok(())
-    }
-
-    #[test]
-    #[ignore]
-    pub fn test_channels() {
-        let (s_pgm, r_pgm) = unbounded::<i32>();
-        let (s_cmd, r_cmd) = unbounded::<i32>();
-        let (s_threads, r_threads) = unbounded::<i32>();
-
-        let start = 11;
-        let stop = 12;
-        let restart = 13;
-
-        let pgms_thread = thread::spawn(move || {
-            // start program, get a child, send it over the programs channel ---
-            let mut child = 1;
-            loop {
-                if child > 3 {
-                    break;
-                }
-                let _r = s_pgm.send(child);
-                // would wait for child to exit..
-                let msg = r_threads.recv().unwrap();
-                println!(
-                    "pgrms_thread got a message on the threads channel: {:?}",
-                    msg
-                );
-
-                child += 1;
-            }
-        });
-
-        let cmds_thread = thread::spawn(move || {
-            let mut msg = 0;
-            loop {
-                select! {
-                    recv(r_pgm) -> msg => println!("cmds_thread got a message from the programs thread: {:?}", msg),
-                    recv(r_cmd) -> msg => {
-                        println!("cmds_thread got a message from the command channel: {:?}", msg);
-                        // for a START, just send the message
-                        if msg == Ok(start) {
-                            let _r = s_threads.send(start);
-                        }
-                        // if the command is a STOP or RESTART,
-                        // need to send a stop message to thread 1 and then kill the child
-                        if msg == Ok(stop) {
-                            let _r =  s_threads.send(stop);
-                            // kill child ...
-                        }
-                        if msg == Ok(restart) {
-                            let _r =  s_threads.send(restart);
-                            // kill child
-                        }
-                    },
-                }
-                msg += 1;
-                if msg > 5 {
-                    break;
-                }
-            }
-        });
-        // send some commands ---
-        let _r = s_cmd.send(start);
-        let _r = s_cmd.send(restart);
-        let _r = s_cmd.send(stop);
-        let _r = pgms_thread.join();
-        let _r = cmds_thread.join();
     }
 }
