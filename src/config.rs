@@ -2,6 +2,7 @@ use serde_derive::Deserialize;
 use std::collections::HashMap;
 use std::env;
 use std::path::Path;
+use tracing::{debug, instrument};
 
 use crate::errors::SupersError;
 
@@ -55,11 +56,13 @@ pub fn get_app_config_from_str(
 
 const DEFAULT_CONFIG_PATH: &str = "/etc/supers/conf.toml";
 
+#[instrument(level = "debug")]
 pub fn get_app_config_from_file() -> Result<ApplicationConfig, SupersError> {
     let config_file_input = env::var("SUPERS_CONF_FILE")
         .unwrap_or_else(|_| DEFAULT_CONFIG_PATH.to_string());
     let config_path = Path::new(&config_file_input);
 
+    debug!(config=?config_path, "using config file");
     // read the config file from the path
     let config_file_text = std::fs::read_to_string(config_path)
         .map_err(SupersError::ApplicationConfigFileError)?;
