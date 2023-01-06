@@ -1,6 +1,6 @@
 use actix_web::web::Data;
 use actix_web::{App, HttpServer};
-use config::{
+use crate::config::{
     get_app_config_from_file, ApplicationConfig, ProgramConfig, RestartPolicy,
 };
 use log::init_tracing;
