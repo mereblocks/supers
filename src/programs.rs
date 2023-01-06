@@ -395,7 +395,7 @@ mod test {
             &mut child,
             &sx,
             &p,
-            s.clone(),
+            s,
         )?;
         // Should restart on error
         let resp = rx.recv()?;

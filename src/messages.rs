@@ -1,5 +1,5 @@
 /// Messages sent on the command channel
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum CommandMsg {
     Start,
     Stop,

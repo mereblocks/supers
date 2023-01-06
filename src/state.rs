@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Display};
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProgramStatus {
     Running,
     Stopped,
