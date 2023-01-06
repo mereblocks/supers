@@ -6,9 +6,10 @@ use std::path::Path;
 use crate::errors::SupersError;
 
 /// These are the available restart policies for programs
-#[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Default)]
 pub enum RestartPolicy {
     /// Always restart the program after it exits, regardless of exit status
+    #[default]
     Always,
 
     /// Never restart the program, regardless of exist status
@@ -19,7 +20,7 @@ pub enum RestartPolicy {
 }
 
 /// Configuration for a program to be launched and supervised by supers.
-#[derive(Clone, Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug, Default)]
 pub struct ProgramConfig {
     /// The name of the program, used for naming the thread, logging, etc. Should be unique within a supers application
     pub name: String,
