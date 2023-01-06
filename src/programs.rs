@@ -47,7 +47,7 @@ pub fn update_pgm_status(
     *a.programs.entry(pgm_name.into()).or_insert(status) = status;
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum Action {
     ResetChild,
     SpawnChild,
@@ -303,12 +303,19 @@ pub fn start_program_threads(
 #[cfg(test)]
 mod test {
     use crate::{
-        get_test_app_config, messages::CommandMsg,
-        programs::run_state_machine_with_effects, state::ApplicationState,
+        config::ProgramConfig,
+        get_test_app_config,
+        messages::CommandMsg,
+        programs::{
+            run_action, run_state_machine_with_effects, state_machine_step,
+            Action, ChildStatus,
+        },
+        state::{ApplicationState, ApplicationStatus, ProgramStatus},
     };
     use anyhow::Result;
     use crossbeam::channel::{select, unbounded};
     use std::{
+        process::Command,
         sync::{Arc, Mutex},
         thread,
         time::Duration,
@@ -320,6 +327,38 @@ mod test {
     #[test]
     fn test_foo() -> Result<()> {
         info!("in test foo");
+        Ok(())
+    }
+
+    #[test]
+    fn test_state_machine_step() -> Result<()> {
+        let s = state_machine_step(&ChildStatus::NoChild, &None);
+        assert!(s.is_empty());
+        let s =
+            state_machine_step(&ChildStatus::NoChild, &Some(CommandMsg::Start));
+        assert_eq!(
+            s,
+            vec![
+                Action::SpawnChild,
+                Action::UpdateStatus(ProgramStatus::Running)
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_action() -> Result<()> {
+        let p: ProgramConfig = Default::default();
+        let s = Arc::new(Mutex::new(Default::default()));
+        let (sx, rx) = unbounded();
+
+        let mut child = None;
+        run_action(&Action::ResetChild, &mut child, &sx, &p, s.clone())?;
+        assert!(child.is_none());
+
+        let mut child = Some(Command::new("cat").spawn()?);
+        run_action(&Action::ResetChild, &mut child, &sx, &p, s.clone())?;
+        assert!(child.is_none());
         Ok(())
     }
 
