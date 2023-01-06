@@ -48,26 +48,15 @@ $ export SUPERS_CONF_FILE=$HOME/supers/example_config.toml
 
 The `supers` administrative API provides the following endpoints:
 
-`GET /ready` 
-: Check that `supers` is running.
-
-`GET /app`
-: Get the status of the application.
-
-`GET /programs` 
-: Get the status of all the programs defined in the application.
-
-`GET /programs/{name}`
-: Get the status of the programs `{name}`.
-
-`POST /programs/{name}/start`
-: Ensure that program `{name}` is running; i.e., start it if it is stopped.
-
-`POST /programs/{name}/stop`
-: Ensure that program `{name}` is not running; i.e., stop it if it is running.
-
-`POST /programs/{name}/restart`
-: Stop program `{name}` if it is running and then start it.
+Endpoint | Description 
+-------- | -----------
+`GET /ready` | Check that `supers` is running.
+`GET /app` | Get the status of the application.
+`GET /programs` | Get the status of all the programs defined in the application.
+`GET /programs/{name}` | Get the status of the programs `{name}`.
+`POST /programs/{name}/start` | Ensure that program `{name}` is running; i.e., start it if it is stopped.
+`POST /programs/{name}/stop` | Ensure that program `{name}` is not running; i.e., stop it if it is running.
+`POST /programs/{name}/restart` | Stop program `{name}` if it is running and then start it.
 
 ## Examples
 
