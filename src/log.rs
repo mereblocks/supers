@@ -11,7 +11,7 @@ pub fn init_tracing() {
         .with_default_directive("supers=debug".parse().unwrap())
         .from_env()
         .expect("error parsing RUST_LOG environment variable");
-    let subs = tracing_subscriber::fmt()
+    let subscriber = tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_thread_names(true)
         .with_line_number(true)
@@ -21,11 +21,5 @@ pub fn init_tracing() {
         .flatten_event(true)
         .with_writer(std::io::stderr)
         .finish();
-    // let formatting_layer =
-    //     BunyanFormattingLayer::new("supers".into(), std::io::stderr)
-    //         .with_filter(filter);
-    // let subscriber = Registry::default()
-    //     .with(JsonStorageLayer)
-    //     .with(formatting_layer);
-    let _ = tracing::subscriber::set_global_default(subs);
+    let _ = tracing::subscriber::set_global_default(subscriber);
 }
