@@ -344,7 +344,7 @@ mod test {
         run_action(&Action::ResetChild, &mut child, &sx, &p, s.clone())?;
         assert!(child.is_none());
 
-        let mut child = Some(Command::new("cat").spawn()?);
+        let mut child = Some(Command::new("true").spawn()?);
         run_action(&Action::ResetChild, &mut child, &sx, &p, s.clone())?;
         assert!(child.is_none());
 
