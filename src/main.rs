@@ -1,12 +1,10 @@
+use crate::config::{ApplicationConfig, ProgramConfig, RestartPolicy};
 use actix_web::web::Data;
 use actix_web::{App, HttpServer};
-use crate::config::{
-    get_app_config_from_file, ApplicationConfig, ProgramConfig, RestartPolicy,
-};
 use log::init_tracing;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use tracing::{debug_span, info, warn};
+use tracing::info;
 use tracing_actix_web::TracingLogger;
 
 use crossbeam::channel::Sender;
@@ -87,16 +85,7 @@ pub struct WebAppState {
 async fn main() -> Result<(), SupersError> {
     init_tracing();
 
-    let app_config = {
-        let _span = debug_span!("config").entered();
-        // get the config for this Mereblocks application
-        get_app_config_from_file().unwrap_or_else(|e| {
-            // for now, we'll use the test config if we are not able to read the config
-            warn!("Error reading config file: {e}");
-            warn!("Using test config");
-            get_test_app_config()
-        })
-    };
+    let app_config = ApplicationConfig::from_sources()?;
 
     // create the app_state container with statuses for the application status and the programs
     let app_state = Arc::new(Mutex::new(ApplicationState {

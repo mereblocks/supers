@@ -1,3 +1,4 @@
+use crate::errors::SupersError;
 use config::{Config, FileFormat};
 use serde::Serialize;
 use serde_derive::Deserialize;
@@ -5,9 +6,6 @@ use std::env;
 use std::net::Ipv4Addr;
 use std::path::{Path, PathBuf};
 use std::{collections::HashMap, net::IpAddr};
-use tracing::{debug, instrument};
-
-use crate::errors::SupersError;
 
 // Configuration management
 // ========================
@@ -154,29 +152,6 @@ impl ApplicationConfig {
                 SupersError::ApplicationConfigError(format!("==> {}", e))
             })
     }
-}
-
-pub fn get_app_config_from_str(
-    s: String,
-) -> Result<ApplicationConfig, SupersError> {
-    toml::from_str(&s).map_err(SupersError::ApplicationConfigParseError)
-}
-
-const DEFAULT_CONFIG_PATH: &str = "/etc/supers/conf.toml";
-
-#[instrument(level = "debug")]
-pub fn get_app_config_from_file() -> Result<ApplicationConfig, SupersError> {
-    let config_file_input = env::var("SUPERS_CONF_FILE")
-        .unwrap_or_else(|_| DEFAULT_CONFIG_PATH.to_string());
-    let config_path = Path::new(&config_file_input);
-
-    debug!(config=?config_path, "using config file");
-    // read the config file from the path
-    let config_file_text = std::fs::read_to_string(config_path)
-        .map_err(SupersError::ApplicationConfigFileError)?;
-
-    // convert to config object
-    get_app_config_from_str(config_file_text)
 }
 
 #[cfg(test)]
