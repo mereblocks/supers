@@ -1,5 +1,5 @@
 use crate::errors::SupersError;
-use config::{Config, FileFormat};
+use config::Config;
 use serde::Serialize;
 use serde_derive::Deserialize;
 use std::env;
@@ -142,9 +142,7 @@ impl ApplicationConfig {
                     SupersError::ApplicationConfigError(format!("--> {}", e))
                 })?,
             )
-            .add_source(
-                config::File::new(file_path, FileFormat::Toml).required(false),
-            )
+            .add_source(config::File::with_name(file_path).required(false))
             .add_source(config::Environment::with_prefix(var_prefix))
             .build()
             .and_then(|s| s.try_deserialize::<ApplicationConfig>())
@@ -159,10 +157,12 @@ mod test {
     use super::ApplicationConfig;
     use anyhow::Result;
     use std::env;
+    use std::error::Error;
+    use std::fs::File;
     use std::io::Seek;
     use std::io::Write;
     use std::{net::IpAddr, path::PathBuf, str::FromStr};
-    use tempfile::NamedTempFile;
+    use tempfile::TempDir;
 
     #[test]
     fn test_default_config() -> Result<()> {
@@ -178,12 +178,41 @@ mod test {
         Ok(())
     }
 
-    fn make_test_config(cfg: &ApplicationConfig) -> Result<NamedTempFile> {
-        let s = toml::to_string(cfg)?;
-        let mut f = tempfile::NamedTempFile::new()?;
+    fn make_test_config<F, E>(
+        cfg: &ApplicationConfig,
+        file_name: &str,
+        serialize: F,
+    ) -> Result<(TempDir, File, PathBuf)>
+    where
+        F: FnOnce(&ApplicationConfig) -> Result<String, E>,
+        E: Error + Send + Sync + 'static,
+    {
+        let temp_dir = tempfile::tempdir()?;
+        let path = temp_dir.path().join(file_name);
+        let s = serialize(cfg)?;
+        let mut f = File::create(&path)?;
         f.write_all(s.as_bytes())?;
         f.rewind()?;
-        Ok(f)
+        Ok((temp_dir, f, path))
+    }
+
+    #[test]
+    fn test_yaml_config() -> Result<()> {
+        let cfg = ApplicationConfig {
+            port: 3333,
+            ..Default::default()
+        };
+        let (_temp_dir, _p, path) =
+            make_test_config(&cfg, "foo.yaml", serde_yaml::to_string)?;
+        let var = uuid::Uuid::new_v4().to_string();
+        env::set_var(&var, path);
+        let x = ApplicationConfig::from_sources_variable(
+            &var,
+            &PathBuf::from(""),
+            "",
+        )?;
+        assert_eq!(x.port, 3333);
+        Ok(())
     }
 
     #[test]
@@ -192,9 +221,10 @@ mod test {
             port: 9999,
             ..Default::default()
         };
-        let p = make_test_config(&cfg)?;
+        let (_temp_dir, _p, path) =
+            make_test_config(&cfg, "foo.toml", toml::to_string)?;
         let var = uuid::Uuid::new_v4().to_string();
-        env::set_var(&var, p.path());
+        env::set_var(&var, path);
         // Should read from the file in the config variable `var`
         let x = ApplicationConfig::from_sources_variable(
             &var,
@@ -207,20 +237,20 @@ mod test {
             port: 1111,
             ..Default::default()
         };
-        let q = make_test_config(&cfg2)?;
+        let (_temp_dir2, _q, path) =
+            make_test_config(&cfg2, "foo.toml", toml::to_string)?;
         // Default config exists, but variable should have priority
-        let y = ApplicationConfig::from_sources_variable(&var, &q.path(), "")?;
+        let y = ApplicationConfig::from_sources_variable(&var, &path, "")?;
         assert_eq!(y.port, 9999);
 
         // Variable is not set, should use the default config
-        let y = ApplicationConfig::from_sources_variable("", &q.path(), "")?;
+        let y = ApplicationConfig::from_sources_variable("", &path, "")?;
         assert_eq!(y.port, 1111);
 
         let prefix = uuid::Uuid::new_v4().simple().to_string().to_uppercase();
         env::set_var(format!("{prefix}_PORT"), "2222");
         // Environment variable with prefix should have priority over everything
-        let y =
-            ApplicationConfig::from_sources_variable(&var, &q.path(), &prefix)?;
+        let y = ApplicationConfig::from_sources_variable(&var, &path, &prefix)?;
         assert_eq!(y.port, 2222);
 
         Ok(())
