@@ -13,6 +13,9 @@ pub enum SupersError {
     #[error("supers was unable to read application config file; details: {0}")]
     ApplicationConfigFileError(std::io::Error),
 
+    #[error("supers was unable to read configuration sources; details: {0}")]
+    ApplicationConfigError(String),
+
     #[error("supers was unable to start thread for program {0}; details: {1}")]
     ProgramThreadStartError(String, std::io::Error),
 

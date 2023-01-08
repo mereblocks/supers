@@ -66,6 +66,7 @@ pub fn get_test_app_config() -> ApplicationConfig {
     ApplicationConfig {
         app_name: "Test App".to_string(),
         programs: vec![p1, p2, p3],
+        ..Default::default()
     }
 }
 
