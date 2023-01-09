@@ -153,7 +153,7 @@ impl ApplicationConfig {
                     &Default::default(),
                 )
                 .map_err(|e| {
-                    SupersError::ApplicationConfigError(format!("--> {}", e))
+                    SupersError::ApplicationConfigError(format!("{}", e))
                 })?,
             )
             .add_source(config::File::with_name(file_path).required(false))
@@ -161,7 +161,7 @@ impl ApplicationConfig {
             .build()
             .and_then(|s| s.try_deserialize::<ApplicationConfig>())
             .map_err(|e| {
-                SupersError::ApplicationConfigError(format!("==> {}", e))
+                SupersError::ApplicationConfigError(format!("{}", e))
             })
     }
 }
