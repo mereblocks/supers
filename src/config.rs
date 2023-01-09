@@ -114,9 +114,9 @@ impl ApplicationConfig {
     pub fn from_sources() -> Result<Self, SupersError> {
         debug!("reading config from all sources");
         Self::from_sources_variable(
-            &CONFIG_FILE_VARIABLE,
-            &DEFAULT_CONF_FILE,
-            &CONFIG_VAR_PREFIX,
+            CONFIG_FILE_VARIABLE,
+            DEFAULT_CONF_FILE,
+            CONFIG_VAR_PREFIX,
             &dirs::config_dir().unwrap_or_default(),
         )
     }
@@ -132,7 +132,7 @@ impl ApplicationConfig {
         let file = if let Ok(v) = env::var(var) {
             let f = PathBuf::from(v);
             debug!(file = ?f, "reading from value in environment variable");
-            f.try_exists()?.then(|| f).ok_or_else(|| {
+            f.try_exists()?.then_some(f).ok_or_else(|| {
                 SupersError::ApplicationConfigError(format!(
                     "file from variable {var} not found"
                 ))
