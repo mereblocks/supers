@@ -37,12 +37,16 @@ See the full list of available tasks with `task -a`. Check documentation for a g
 
 ## Configure
 
-Create a TOML file either in the default path (`/etc/supers/conf.toml`) or specify a custom path using the `SUPERS_CONF_FILE` environment variable, e.g., 
+`supers` accept multiple formats for configuration: TOML, JSON, YAML, INI, RON, and JSON5.  It also accepts overriding the configuration via environment variables.
 
-```bash
-$ export SUPERS_CONF_FILE=$HOME/supers/example_config.toml
-```
+It reads the configuration from the following sources, in order. Each source can 
+overwrite the values from the previous one. All sources are optional.
 
+1. *Default configuration* (from the `Default` implementation for `ApplicationConfig`).
+2. *User configuration file*:
+   1. If the environment variable `SUPERS_CONF_FILE` is set, read the file taking its path from this variable. It is an error if the environment variable points to a non-existent file.
+   2. If the environment variable `SUPERS_CONF_FILE` is **not** set, read the file `$CONFIG_DIR/supers/conf.{toml,yaml,yml,json,json5,ini,ron}`, where `$CONFIG_DIR` is the standard user's config directory for the platform (e.g., `~/.config` in Linux, `~/Library/Application Support` in macOS). `supers` ignore this source if the file does not exist.
+3. *Environment variables*: an environment variable of the form `SUPERS_MY_FIELD` overwrites a field with name `my_field` in from the previous sources. 
 
 ## Endpoints
 

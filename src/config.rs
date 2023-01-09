@@ -1,5 +1,6 @@
 use crate::errors::SupersError;
 use config::Config;
+use globwalk::GlobWalkerBuilder;
 use serde::Serialize;
 use serde_derive::Deserialize;
 use std::env;
@@ -20,7 +21,8 @@ const CONFIG_FILE_VARIABLE: &str = "SUPERS_CONF_FILE";
 ///
 /// For example, for Linux the location is `~/.config/supers/conf.yaml`.
 ///
-const DEFAULT_CONF_FILE: &str = "supers/conf.toml";
+const DEFAULT_CONF_FILE: &str =
+    "supers/conf.{toml,yaml,yml,json,json5,ini,ron}";
 
 /// Environment variables prefix.
 ///
@@ -85,6 +87,17 @@ impl Default for ApplicationConfig {
     }
 }
 
+// Get first file matching `pattern` in `dir`, or `None` otherwise.
+fn get_first_match(pattern: &str, dir: &Path) -> Option<PathBuf> {
+    GlobWalkerBuilder::new(dir, pattern)
+        .build()
+        .ok()
+        .as_mut()
+        .and_then(|w| w.next())
+        .and_then(|d| d.ok())
+        .map(|d| d.into_path())
+}
+
 impl ApplicationConfig {
     /// Build a `ApplicationConfig` value.
     ///
@@ -99,15 +112,17 @@ impl ApplicationConfig {
     pub fn from_sources() -> Result<Self, SupersError> {
         Self::from_sources_variable(
             &CONFIG_FILE_VARIABLE,
-            &PathBuf::from(DEFAULT_CONF_FILE),
+            &DEFAULT_CONF_FILE,
             &CONFIG_VAR_PREFIX,
+            &dirs::config_dir().unwrap_or_default(),
         )
     }
 
     fn from_sources_variable(
         var: &str,
-        default_config: &Path,
+        default_config: &str,
         prefix: &str,
+        config_dir: &Path,
     ) -> Result<Self, SupersError> {
         let file = if let Ok(v) = env::var(var) {
             let f = PathBuf::from(v);
@@ -117,9 +132,8 @@ impl ApplicationConfig {
                 ))
             })?
         } else {
-            dirs::config_dir()
-                .unwrap_or_else(|| ".".into())
-                .join(default_config)
+            get_first_match(default_config, config_dir)
+                .unwrap_or_else(|| "".into())
         };
         Self::from_sources_with_names(&file, prefix)
     }
@@ -154,10 +168,12 @@ impl ApplicationConfig {
 
 #[cfg(test)]
 mod test {
+    use super::get_first_match;
     use super::ApplicationConfig;
     use anyhow::Result;
     use std::env;
     use std::error::Error;
+    use std::ffi::OsStr;
     use std::fs::File;
     use std::io::Seek;
     use std::io::Write;
@@ -165,11 +181,31 @@ mod test {
     use tempfile::TempDir;
 
     #[test]
+    fn test_glob() -> Result<()> {
+        let temp_dir = tempfile::tempdir()?;
+        let _f1 = File::create(temp_dir.path().join("foo.a1"))?;
+        let _f2 = File::create(temp_dir.path().join("foo.a2"))?;
+        let _g3 = File::create(temp_dir.path().join("bar.b1"))?;
+
+        let x = get_first_match("*.b*", temp_dir.path()).unwrap();
+        assert_eq!(x.file_name(), Some(OsStr::new("bar.b1")));
+
+        let x = get_first_match("*.a*", temp_dir.path()).unwrap();
+        assert_eq!(x.file_stem(), Some(OsStr::new("foo")));
+
+        let x = get_first_match("*.x", temp_dir.path());
+        assert!(x.is_none());
+
+        Ok(())
+    }
+
+    #[test]
     fn test_default_config() -> Result<()> {
         let x = ApplicationConfig::from_sources_variable(
             "",
-            &PathBuf::from(""),
             "",
+            "",
+            &PathBuf::from(""),
         )?;
         assert_eq!(x.port, 8080);
         assert_eq!(x.app_name, "");
@@ -182,7 +218,7 @@ mod test {
         cfg: &ApplicationConfig,
         file_name: &str,
         serialize: F,
-    ) -> Result<(TempDir, File, PathBuf)>
+    ) -> Result<(TempDir, File, String)>
     where
         F: FnOnce(&ApplicationConfig) -> Result<String, E>,
         E: Error + Send + Sync + 'static,
@@ -193,7 +229,7 @@ mod test {
         let mut f = File::create(&path)?;
         f.write_all(s.as_bytes())?;
         f.rewind()?;
-        Ok((temp_dir, f, path))
+        Ok((temp_dir, f, path.to_string_lossy().to_string()))
     }
 
     #[test]
@@ -208,8 +244,9 @@ mod test {
         env::set_var(&var, path);
         let x = ApplicationConfig::from_sources_variable(
             &var,
-            &PathBuf::from(""),
             "",
+            "",
+            &PathBuf::from(""),
         )?;
         assert_eq!(x.port, 3333);
         Ok(())
@@ -228,8 +265,9 @@ mod test {
         // Should read from the file in the config variable `var`
         let x = ApplicationConfig::from_sources_variable(
             &var,
-            &PathBuf::from(""),
             "",
+            "",
+            &PathBuf::from(""),
         )?;
         assert_eq!(x.port, 9999);
 
@@ -237,20 +275,35 @@ mod test {
             port: 1111,
             ..Default::default()
         };
-        let (_temp_dir2, _q, path) =
+        let (temp_dir2, _q, _path) =
             make_test_config(&cfg2, "foo.toml", toml::to_string)?;
         // Default config exists, but variable should have priority
-        let y = ApplicationConfig::from_sources_variable(&var, &path, "")?;
+        let y = ApplicationConfig::from_sources_variable(
+            &var,
+            "foo.toml",
+            "",
+            temp_dir2.path(),
+        )?;
         assert_eq!(y.port, 9999);
 
         // Variable is not set, should use the default config
-        let y = ApplicationConfig::from_sources_variable("", &path, "")?;
+        let y = ApplicationConfig::from_sources_variable(
+            "",
+            "foo.toml",
+            "",
+            temp_dir2.path(),
+        )?;
         assert_eq!(y.port, 1111);
 
         let prefix = uuid::Uuid::new_v4().simple().to_string().to_uppercase();
         env::set_var(format!("{prefix}_PORT"), "2222");
         // Environment variable with prefix should have priority over everything
-        let y = ApplicationConfig::from_sources_variable(&var, &path, &prefix)?;
+        let y = ApplicationConfig::from_sources_variable(
+            &var,
+            "foo.toml",
+            &prefix,
+            temp_dir2.path(),
+        )?;
         assert_eq!(y.port, 2222);
 
         Ok(())
