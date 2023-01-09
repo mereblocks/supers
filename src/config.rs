@@ -7,6 +7,7 @@ use std::env;
 use std::net::Ipv4Addr;
 use std::path::{Path, PathBuf};
 use std::{collections::HashMap, net::IpAddr};
+use tracing::{instrument, debug};
 
 // Configuration management
 // ========================
@@ -109,7 +110,9 @@ impl ApplicationConfig {
     /// - Settings from the environment variables prefixed with the value in the
     ///   constant `CONFIG_VAR_PREFIX`.
     ///
+    #[instrument(level = "debug")]
     pub fn from_sources() -> Result<Self, SupersError> {
+        debug!("reading config from all sources");
         Self::from_sources_variable(
             &CONFIG_FILE_VARIABLE,
             &DEFAULT_CONF_FILE,
@@ -118,26 +121,31 @@ impl ApplicationConfig {
         )
     }
 
+    #[instrument(level = "debug")]
     fn from_sources_variable(
         var: &str,
         default_config: &str,
         prefix: &str,
         config_dir: &Path,
     ) -> Result<Self, SupersError> {
+        debug!(var=var, "cheching environment variable");
         let file = if let Ok(v) = env::var(var) {
             let f = PathBuf::from(v);
+            debug!(file = ?f, "reading from value in environment variable");
             f.try_exists()?.then(|| f).ok_or_else(|| {
                 SupersError::ApplicationConfigError(format!(
                     "file from variable {var} not found"
                 ))
             })?
         } else {
+            debug!("environment variable not set; reading from default config file");
             get_first_match(default_config, config_dir)
                 .unwrap_or_else(|| "".into())
         };
         Self::from_sources_with_names(&file, prefix)
     }
 
+    #[instrument(level = "debug")]
     fn from_sources_with_names(
         file: &Path,
         var_prefix: &str,
@@ -147,6 +155,7 @@ impl ApplicationConfig {
                 "path to config file cannot be converted to string".into(),
             )
         })?;
+        debug!("running `config` crate");
         Config::builder()
             .add_source(
                 config::Config::try_from::<ApplicationConfig>(
@@ -160,9 +169,7 @@ impl ApplicationConfig {
             .add_source(config::Environment::with_prefix(var_prefix))
             .build()
             .and_then(|s| s.try_deserialize::<ApplicationConfig>())
-            .map_err(|e| {
-                SupersError::ApplicationConfigError(format!("{}", e))
-            })
+            .map_err(|e| SupersError::ApplicationConfigError(format!("{}", e)))
     }
 }
 
