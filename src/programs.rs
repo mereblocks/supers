@@ -134,11 +134,14 @@ fn state_machine_step(
         (ChildStatus::Exited(code), None) => {
             // The child exited, and there is no command in the queue.
             // Let's apply the policies, if any.
-            vec![Action::ApplyPolicy(*code)]
+            vec![
+                Action::UpdateStatus(ProgramStatus::Stopped),
+                Action::ApplyPolicy(*code),
+            ]
         }
         (ChildStatus::Exited(_), Some(CommandMsg::Stop)) => {
             // Child has exited, so we ignore the `Stop` command
-            vec![]
+            vec![Action::UpdateStatus(ProgramStatus::Stopped)]
         }
         (
             ChildStatus::Exited(_),
@@ -331,6 +334,21 @@ mod test {
                 Action::UpdateStatus(ProgramStatus::Running)
             ]
         );
+
+        let status = Command::new("true").spawn()?.wait()?;
+        let s = state_machine_step(&ChildStatus::Exited(status), &None);
+        assert!(s.contains(&Action::UpdateStatus(ProgramStatus::Stopped)));
+
+        let status = Command::new("false").spawn()?.wait()?;
+        let s = state_machine_step(&ChildStatus::Exited(status), &None);
+        assert!(s.contains(&Action::UpdateStatus(ProgramStatus::Stopped)));
+
+        let status = Command::new("false").spawn()?.wait()?;
+        let s = state_machine_step(
+            &ChildStatus::Exited(status),
+            &Some(CommandMsg::Stop),
+        );
+        assert!(s.contains(&Action::UpdateStatus(ProgramStatus::Stopped)));
         Ok(())
     }
 
@@ -390,13 +408,7 @@ mod test {
         assert!(resp.is_err());
 
         let status = Command::new("false").spawn()?.wait()?;
-        run_action(
-            &Action::ApplyPolicy(status),
-            &mut child,
-            &sx,
-            &p,
-            s,
-        )?;
+        run_action(&Action::ApplyPolicy(status), &mut child, &sx, &p, s)?;
         // Should restart on error
         let resp = rx.recv()?;
         assert_eq!(resp, CommandMsg::Start);
