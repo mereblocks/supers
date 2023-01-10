@@ -121,12 +121,9 @@ async fn main() -> Result<(), SupersError> {
             .service(handlers::stop_program)
             .service(handlers::restart_program)
     })
-    .bind(("127.0.0.1", 8080))?
+    .bind((app_config.address, app_config.port))?
     .run()
     .await?;
 
     Ok(())
-    // for t in threads {
-    //     t.join().unwrap();
-    // }
 }
